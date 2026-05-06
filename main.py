@@ -96,7 +96,8 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Thread ID ties this run to the checkpointer so it can be paused and resumed
-    thread_id = args.thread_id or user_input[:40].strip().replace(" ", "-").lower()
+    thread_id = args.thread_id or user_input[:40].strip().replace(
+        " ", "-").lower()
     config = {"configurable": {"thread_id": thread_id}}
     log.info("Thread ID: %s", thread_id)
 

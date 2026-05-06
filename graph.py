@@ -1,6 +1,9 @@
-from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
+import logging
 
+from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+from config import CHECKPOINT_DB_PATH
 from state import SDLCState
 from nodes import (
     planner_node,
@@ -10,6 +13,8 @@ from nodes import (
     qa_executor_node,
     infra_executor_node,
 )
+
+log = logging.getLogger(__name__)
 
 # ── Build the directed graph ──────────────────────────────────────────────────
 workflow = StateGraph(SDLCState)
@@ -32,9 +37,19 @@ workflow.add_edge("infra_executor", END)
 
 workflow.set_entry_point("planner")
 
-# ── Compile with HITL Phase 1: checkpointer + Gate 1 breakpoint ──────────────
-memory = MemorySaver()
+# ── Compile with SQLite checkpointer + Gate 1 breakpoint ─────────────────────
+# SqliteSaver persists state to disk so paused runs survive process restarts.
+# The DB file lives at CHECKPOINT_DB_PATH (default: .checkpoints/sdlc.db).
+# To resume a paused run: python main.py --thread-id <thread-id>
+#
+# SqliteSaver.from_conn_string() is a context manager — we enter it once at
+# module load and keep the connection open for the lifetime of the process.
+# This is the correct pattern for a long-running server or CLI session.
+log.info("Initialising SQLite checkpointer at %s", CHECKPOINT_DB_PATH)
+_sqlite_ctx = SqliteSaver.from_conn_string(CHECKPOINT_DB_PATH)
+_checkpointer = _sqlite_ctx.__enter__()
+
 app = workflow.compile(
-    checkpointer=memory,
+    checkpointer=_checkpointer,
     interrupt_before=["fe_executor"],  # Gate 1: pause for human plan review
 )

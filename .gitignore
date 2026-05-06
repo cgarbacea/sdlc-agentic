@@ -21,6 +21,9 @@ build/
 # RAG database (rebuilt locally, not committed)
 rag_db/
 
+# LangGraph SQLite checkpoint database (runtime state, not source)
+.checkpoints/
+
 # macOS
 .DS_Store
 

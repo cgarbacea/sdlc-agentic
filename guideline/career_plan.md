@@ -57,7 +57,7 @@ A recruiter or client looking at the GitHub repo in 30 seconds should understand
 - [x] `_rewrite_plan_with_corrections()` — LLM rewrites plan cleanly on each round
 - [x] `app.update_state()` correctly (state field: `architect_plan`)
 - [x] `app.stream(None, config)` for the resume path
-- [ ] Swap `MemorySaver` → `SqliteSaver` so sessions survive process restarts
+- [x] Swap `MemorySaver` → `SqliteSaver` — state persists to `.checkpoints/sdlc.db`, survives restarts
 - [ ] Tag `v0.2.0-hitl-gate1`
 
 ### Concepts you will solidify
