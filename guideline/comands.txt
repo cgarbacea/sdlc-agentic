@@ -1,0 +1,74 @@
+Test MCP is on
+
+cd /Users/cgarbacea/Projects/YOUPAGE/sdlc-agentic && source venv/bin/activate && python -c "
+from mcp.server.fastmcp import FastMCP
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location('mcp_server', 'mcp_server.py')
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+print('Tools registered:')
+for name in ['start_pipeline','get_pipeline_state','approve_plan','list_threads']:
+    print(f'  ✓ {name}' if hasattr(m, name) else f'  ✗ {name} MISSING')
+print('Server name:', m.mcp.name)
+" 2>/dev/null
+
+--- 
+
+Tools registered:
+  ✓ start_pipeline
+  ✓ get_pipeline_state
+  ✓ approve_plan
+  ✓ list_threads
+Server name: sdlc-pipeline
+
+Confirm the API is responding
+
+cd /Users/cgarbacea/Projects/YOUPAGE/sdlc-agentic && source venv/bin/activate && python -c "
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import HumanMessage
+import time
+print('Calling Claude API...')
+t = time.time()
+llm = ChatAnthropic(model='claude-sonnet-4-5', temperature=0.1)
+r = llm.invoke([HumanMessage(content='Say OK in one word')])
+print(f'Response in {time.time()-t:.1f}s: {r.content}')
+" 2>/dev/null
+
+Run start_pipline
+
+cd /Users/cgarbacea/Projects/YOUPAGE/sdlc-agentic && source venv/bin/activate && python -c "
+import importlib.util, sys, json
+sys.path.insert(0, '.')
+spec = importlib.util.spec_from_file_location('mcp_server', 'mcp_server.py')
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+print('Calling start_pipeline...')
+result = m.start_pipeline('dark mode toggle feature')
+print(json.dumps({k: v[:200] if isinstance(v, str) and len(v) > 200 else v for k,v in result.items()}, indent=2))
+" 2>/dev/null
+
+Calling start_pipeline...
+
+🧠 [Planner] Analyzing request and creating Jira tickets...
+📝 [CONFLUENCE API CALLED] Published PRD Wiki Page: 'PRD: Dark Mode Toggle Feature' in Space: PROD
+📄 [CONFLUENCE FILE] Saved to /Users/cgarbacea/Projects/YOUPAGE/tmp/confluence/PRD__Dark_Mode_Toggle_Feature_PRD.md
+   ↳ Confluence result: Confluence page 'PRD: Dark Mode Toggle Feature' created successfully.
+🎫 [JIRA API CALLED] Created ticket: [FE] Frontend: Implement Dark Mode Toggle Feature
+📄 [JIRA FILE] Saved to /Users/cgarbacea/Projects/YOUPAGE/tmp/jira/FE_Frontend__Implement_Dark_Mode_Toggle_Feature.md
+   ↳ Jira result: Ticket 'Frontend: Implement Dark Mode Toggle Feature' created successfully in project FE.
+🎫 [JIRA API CALLED] Created ticket: [BE] Backend: Add User Theme Preference API Endpoints
+📄 [JIRA FILE] Saved to /Users/cgarbacea/Projects/YOUPAGE/tmp/jira/BE_Backend__Add_User_Theme_Preference_API_Endpoints.md
+   ↳ Jira result: Ticket 'Backend: Add User Theme Preference API Endpoints' created successfully in project BE.
+
+🧠 [Planner] Writing architectural plan...
+{
+  "thread_id": "dark-mode-toggle-feature",
+  "status": "paused_at_gate1",
+  "nodes_completed": [
+    "planner",
+    "__interrupt__"
+  ],
+  "plan_preview": "# Architectural Plan: Dark Mode Toggle Feature\n\n**Document Date:** 06 May 2026  \n**Feature:** Dark Mode Toggle  \n**Lead Architect:** System Architecture Team\n\n---\n\n## 1. Overview\n\nThis document outlin",
+  "full_plan": "# Architectural Plan: Dark Mode Toggle Feature\n\n**Document Date:** 06 May 2026  \n**Feature:** Dark Mode Toggle  \n**Lead Architect:** System Architecture Team\n\n---\n\n## 1. Overview\n\nThis document outlin",
+  "message": "Plan generated. Review it and call approve_plan(thread_id, corrections='') to proceed, or approve_plan(thread_id, corrections='your changes') to revise."
+}

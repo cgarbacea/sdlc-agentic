@@ -33,7 +33,7 @@
 - [x] Add `pyproject.toml` with metadata, ruff config, pytest config
 - [x] Add `tests/test_smoke.py` — 5 passing smoke tests (no LLM calls)
 - [x] Pushed to https://github.com/cgarbacea/sdlc-agentic
-- [ ] Tag the repo `v0.1.0-poc`
+- [x] Tag the repo `v0.1.0-poc`
 - [ ] Screen recording (Loom, 3 mins) of the pipeline running end-to-end
 
 ### Why
@@ -58,7 +58,7 @@ A recruiter or client looking at the GitHub repo in 30 seconds should understand
 - [x] `app.update_state()` correctly (state field: `architect_plan`)
 - [x] `app.stream(None, config)` for the resume path
 - [x] Swap `MemorySaver` → `SqliteSaver` — state persists to `.checkpoints/sdlc.db`, survives restarts
-- [ ] Tag `v0.2.0-hitl-gate1`
+- [x] Tag `v0.2.0-hitl-gate1`
 
 ### Concepts you will solidify
 
@@ -85,7 +85,7 @@ A recruiter or client looking at the GitHub repo in 30 seconds should understand
 - [x] Register in `.vscode/mcp.json` — Copilot can call tools from this workspace
 - [x] `Dockerfile` (multi-stage, non-root user) + `.dockerignore`
 - [x] 5 MCP smoke tests — 12/12 passing total
-- [ ] Tag `v0.3.0-mcp-server`
+- [x] Tag `v0.3.0-mcp-server`
 - [ ] Screen recording: Copilot calls `start_pipeline` live (the "wow demo")
 
 ### Concepts you will solidify
@@ -107,12 +107,14 @@ A recruiter or client looking at the GitHub repo in 30 seconds should understand
 
 ### Tasks
 
-- [ ] Replace mock `git_commit_to_branch` in `tools/git.py` with real `gitpython` calls
-- [ ] Implement `create_github_pr` using the GitHub REST API (PyGitHub or raw requests)
-- [ ] Add a GitHub Actions workflow in the target monorepo that:
-  - Runs tests on PR creation
-  - Posts test results as a PR comment
-- [ ] Wire a webhook (use `ngrok` locally for development) that triggers a new LangGraph thread when a PR review is submitted with "request changes"
+- [x] Replace mock `git_commit_to_branch` with real `gitpython` — creates branch, stages, commits
+- [x] `create_github_pr` uses `PyGithub` — opens real PR when `GITHUB_ENABLED=True`, degrades gracefully to simulation when credentials not set
+- [x] `GITHUB_ENABLED` flag — dual-mode design: never crashes without credentials
+- [x] `config.py`: `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_FE_REPO`, `GITHUB_BE_REPO`, `GITHUB_BASE_BRANCH`
+- [x] `.env.example` documents all GitHub vars with setup instructions
+- [x] `tests/test_git_tools.py`: 7 tests (offline, no GitHub API calls) — 19/19 total passing
+- [ ] GitHub Actions workflow in target monorepo (runs tests on PR, posts results as comment)
+- [ ] Webhook handler — triggers new LangGraph thread on "request changes" review
 - [ ] Tag `v0.4.0-real-git`
 
 ### Concepts you will solidify
