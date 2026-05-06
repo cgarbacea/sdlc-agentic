@@ -1,3 +1,7 @@
+import argparse
+import logging
+import sys
+
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
 
@@ -5,6 +9,13 @@ from config import FE_REPO_PATH, BE_REPO_PATH
 from graph import app
 from state import SDLCState
 from tools.rag import index_plan
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+)
+log = logging.getLogger(__name__)
 
 _llm = ChatAnthropic(model="claude-sonnet-4-5", temperature=0.1)
 
@@ -40,17 +51,54 @@ Produce the rewritten plan now:
 # ==========================================
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="sdlc-agent",
+        description="AI-native SDLC pipeline: feature request → PR via LangGraph + Claude.",
+    )
+    parser.add_argument(
+        "--feature",
+        type=str,
+        default=None,
+        help="Feature description (omit for interactive prompt).",
+    )
+    parser.add_argument(
+        "--thread-id",
+        type=str,
+        default=None,
+        help="Resume an existing paused pipeline run by its thread ID.",
+    )
+    parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="Auto-approve Gate 1 without prompting (for CI use).",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
+    args = _parse_args()
+
     print("\n" + "=" * 50)
     print("🤖 Welcome to the Agentic SDLC Workspace")
     print("=" * 50)
 
-    user_input = input(
-        "\n👨‍💻 Product Analyst, what feature are we building today?\n> ")
+    if args.feature:
+        user_input = args.feature
+        log.info("Feature provided via CLI: %s", user_input)
+    else:
+        user_input = input(
+            "\n👨‍💻 Product Analyst, what feature are we building today?\n> "
+        )
+
+    if not user_input.strip():
+        log.error("No feature description provided. Exiting.")
+        sys.exit(1)
 
     # Thread ID ties this run to the checkpointer so it can be paused and resumed
-    thread_id = user_input[:40].strip().replace(" ", "-").lower()
+    thread_id = args.thread_id or user_input[:40].strip().replace(" ", "-").lower()
     config = {"configurable": {"thread_id": thread_id}}
+    log.info("Thread ID: %s", thread_id)
 
     initial_state: SDLCState = {
         "user_request": user_input,
@@ -66,9 +114,11 @@ if __name__ == "__main__":
 
     # ── PHASE 1: Run Planner only ──────────────────────────────────────────────
     # Graph pauses automatically at interrupt_before=["fe_executor"] (defined in graph.py)
+    log.info("Starting Planner phase")
     print("\n🚀 Starting Planner phase...")
     for output in app.stream(initial_state, config):
         for node_name, _ in output.items():
+            log.info("Node completed: %s", node_name)
             print(f"\n✅ [{node_name}] completed.")
 
     # ── GATE 1: Human reviews the architectural plan ───────────────────────────
@@ -90,13 +140,18 @@ if __name__ == "__main__":
             "\nApprove this plan? Type 'yes' to proceed, or type your corrections:\n> "
         ).strip()
 
-        if human_feedback.lower() == "yes":
-            print("\n✅ Plan approved.")
+        if args.non_interactive or human_feedback.lower() == "yes":
+            if args.non_interactive:
+                log.info("Non-interactive mode — auto-approving plan")
+                print("\n✅ [CI] Plan auto-approved (--non-interactive).")
+            else:
+                print("\n✅ Plan approved.")
             break
 
         current_plan = _rewrite_plan_with_corrections(
             current_plan, human_feedback)
         app.update_state(config, {"architect_plan": current_plan})
+        log.info("Plan rewritten — round %d", round_num)
         print("\n✅ Plan rewritten — review it above before approving.")
         round_num += 1
 
@@ -122,13 +177,16 @@ if __name__ == "__main__":
             f"\n✂️  Plan truncated to {EXECUTOR_PLAN_LIMIT} chars for executor context.")
 
     # ── PHASE 2: Resume — run all executor nodes ───────────────────────────────
+    log.info("Resuming pipeline — handing off to executors")
     print("\n🚀 Resuming — handing off to executors...")
     for output in app.stream(None, config):
         for node_name, _ in output.items():
+            log.info("Node completed: %s", node_name)
             print(f"\n✅ [{node_name}] completed.")
 
     final = app.get_state(config).values
     pr_urls = final.get("pr_urls", [])
+    log.info("Pipeline complete. Thread: %s", thread_id)
     print(
         f"\n🎉 Run Complete! Check your {FE_REPO_PATH} and {BE_REPO_PATH} folders!")
     if pr_urls:

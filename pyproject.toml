@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "sdlc-agentic"
+version = "0.1.0"
+description = "AI-native SDLC pipeline — LangGraph + Claude Sonnet. Feature request to PR via autonomous multi-agent workflow with HITL gates."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [
+    { name = "Claudiu Garbacea", email = "cgarbacea@users.noreply.github.com" }
+]
+keywords = ["ai", "agents", "sdlc", "langgraph", "mcp", "llm", "devops"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.scripts]
+sdlc-agent = "main:_parse_args"
+
+[project.urls]
+Homepage = "https://github.com/cgarbacea/sdlc-agentic"
+Repository = "https://github.com/cgarbacea/sdlc-agentic"
+Issues = "https://github.com/cgarbacea/sdlc-agentic/issues"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+log_cli = true
+log_cli_level = "INFO"

@@ -26,12 +26,15 @@
 
 ### Tasks
 
-- [ ] Clean up `main.py` — add `argparse` for `--feature` and `--thread-id` flags so it runs from CLI like a real tool
-- [ ] Write a proper `README.md` with: what it does, architecture diagram (Mermaid), how to run, what each node does
-- [ ] Add a `Makefile` with targets: `make run`, `make build-kb`, `make test`
-- [ ] Add `.env.example` (never commit real keys)
-- [ ] Add `pyproject.toml` (replace any ad-hoc dependencies)
+- [x] Clean up `main.py` — `argparse` with `--feature`, `--thread-id`, `--non-interactive` + structured logging
+- [x] Write a proper `README.md` with: what it does, architecture diagram (Mermaid), how to run, what each node does
+- [x] Add a `Makefile` with targets: `make run`, `make build-kb`, `make test`, `make ci-run`
+- [x] Add `.env.example` (never commit real keys)
+- [x] Add `pyproject.toml` with metadata, ruff config, pytest config
+- [x] Add `tests/test_smoke.py` — 5 passing smoke tests (no LLM calls)
+- [x] Pushed to https://github.com/cgarbacea/sdlc-agentic
 - [ ] Tag the repo `v0.1.0-poc`
+- [ ] Screen recording (Loom, 3 mins) of the pipeline running end-to-end
 
 ### Why
 
@@ -50,14 +53,11 @@ A recruiter or client looking at the GitHub repo in 30 seconds should understand
 
 ### Tasks
 
-- [ ] Implement the interactive HITL loop in `main.py`:
-  - Run planner → pause → print plan to terminal
-  - Ask: "Approve (yes) / Correct (type changes) / Abort (no)"
-  - If corrections: call LLM to rewrite plan → show revised version → loop
-  - If yes: resume graph → executors run
-- [ ] Implement `app.update_state()` correctly (state field: `architect_plan`)
-- [ ] Implement `app.stream(None, config)` for the resume path
-- [ ] Add `thread_id` persistence to a local SQLite file (swap `MemorySaver` → `SqliteSaver`) so sessions survive restarts
+- [x] Implement the interactive HITL loop in `main.py` — already done in POC
+- [x] `_rewrite_plan_with_corrections()` — LLM rewrites plan cleanly on each round
+- [x] `app.update_state()` correctly (state field: `architect_plan`)
+- [x] `app.stream(None, config)` for the resume path
+- [ ] Swap `MemorySaver` → `SqliteSaver` so sessions survive process restarts
 - [ ] Tag `v0.2.0-hitl-gate1`
 
 ### Concepts you will solidify
