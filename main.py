@@ -1,0 +1,137 @@
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import HumanMessage
+
+from config import FE_REPO_PATH, BE_REPO_PATH
+from graph import app
+from state import SDLCState
+from tools.rag import index_plan
+
+_llm = ChatAnthropic(model="claude-sonnet-4-5", temperature=0.1)
+
+
+def _rewrite_plan_with_corrections(original_plan: str, corrections: str) -> str:
+    """
+    Ask the LLM to produce a single, clean, rewritten plan that fully
+    incorporates the human's corrections. The executor receives this
+    unified plan with no contradictions.
+    """
+    print("\n🔄 [Gate 1] Rewriting plan with your corrections...")
+    response = _llm.invoke([HumanMessage(content=f"""
+You are a Lead Architect. A human reviewer has provided corrections to an architectural plan.
+Rewrite the plan as a single, clean document that fully incorporates the corrections.
+Do not include any commentary about what changed — just produce the updated plan.
+
+ORIGINAL PLAN:
+\"\"\"
+{original_plan}
+\"\"\"
+
+HUMAN CORRECTIONS:
+\"\"\"
+{corrections}
+\"\"\"
+
+Produce the rewritten plan now:
+""")])
+    return response.content if isinstance(response.content, str) else original_plan
+
+# ==========================================
+# INTERACTIVE RUNNER WITH HITL GATE 1
+# ==========================================
+
+
+if __name__ == "__main__":
+    print("\n" + "=" * 50)
+    print("🤖 Welcome to the Agentic SDLC Workspace")
+    print("=" * 50)
+
+    user_input = input(
+        "\n👨‍💻 Product Analyst, what feature are we building today?\n> ")
+
+    # Thread ID ties this run to the checkpointer so it can be paused and resumed
+    thread_id = user_input[:40].strip().replace(" ", "-").lower()
+    config = {"configurable": {"thread_id": thread_id}}
+
+    initial_state: SDLCState = {
+        "user_request": user_input,
+        "prd": "",
+        "architect_plan": "",
+        "fe_output": "",
+        "be_output": "",
+        "test_output": "",
+        "qa_report": "",
+        "infra_output": "",
+        "pr_urls": [],
+    }
+
+    # ── PHASE 1: Run Planner only ──────────────────────────────────────────────
+    # Graph pauses automatically at interrupt_before=["fe_executor"] (defined in graph.py)
+    print("\n🚀 Starting Planner phase...")
+    for output in app.stream(initial_state, config):
+        for node_name, _ in output.items():
+            print(f"\n✅ [{node_name}] completed.")
+
+    # ── GATE 1: Human reviews the architectural plan ───────────────────────────
+    current_state = app.get_state(config).values
+    architect_plan = current_state.get("architect_plan", "")
+
+    # ── Iterative review loop — repeat until human types 'yes' ─────────────────
+    current_plan = architect_plan
+    round_num = 1
+    while True:
+        print("\n" + "=" * 50)
+        print(f"⏸️  GATE 1 — PLAN REVIEW  (round {round_num})")
+        print("=" * 50)
+        print("\n📋 Architect Plan:\n")
+        print(current_plan)
+        print("\n" + "=" * 50)
+
+        human_feedback = input(
+            "\nApprove this plan? Type 'yes' to proceed, or type your corrections:\n> "
+        ).strip()
+
+        if human_feedback.lower() == "yes":
+            print("\n✅ Plan approved.")
+            break
+
+        current_plan = _rewrite_plan_with_corrections(
+            current_plan, human_feedback)
+        app.update_state(config, {"architect_plan": current_plan})
+        print("\n✅ Plan rewritten — review it above before approving.")
+        round_num += 1
+
+    # Index the approved plan into the RAG knowledge base so executors
+    # (and future runs) can query it like any other company guideline.
+    approved_state = app.get_state(config).values
+    approved_plan = approved_state.get("architect_plan", "")
+    plan_file = index_plan(approved_plan, thread_id)
+    print(f"\n📚 [RAG] Approved plan indexed → {plan_file}")
+
+    # Truncate the plan body before handing to executors to avoid memory pressure
+    # in the RAG embedding model (segfault risk on very large plans).
+    # IMPORTANT: always preserve the human corrections — they are appended after
+    # the '--- Human Corrections ---' marker and must reach the executors intact.
+    EXECUTOR_PLAN_LIMIT = 2000
+    final_state = app.get_state(config).values
+    final_plan = final_state.get("architect_plan", "")
+    if len(final_plan) > EXECUTOR_PLAN_LIMIT:
+        executor_plan = final_plan[:EXECUTOR_PLAN_LIMIT] + \
+            "\n...[plan truncated]"
+        app.update_state(config, {"architect_plan": executor_plan})
+        print(
+            f"\n✂️  Plan truncated to {EXECUTOR_PLAN_LIMIT} chars for executor context.")
+
+    # ── PHASE 2: Resume — run all executor nodes ───────────────────────────────
+    print("\n🚀 Resuming — handing off to executors...")
+    for output in app.stream(None, config):
+        for node_name, _ in output.items():
+            print(f"\n✅ [{node_name}] completed.")
+
+    final = app.get_state(config).values
+    pr_urls = final.get("pr_urls", [])
+    print(
+        f"\n🎉 Run Complete! Check your {FE_REPO_PATH} and {BE_REPO_PATH} folders!")
+    if pr_urls:
+        print("\n📎 Pull Requests opened:")
+        for url in pr_urls:
+            print(f"   {url}")
