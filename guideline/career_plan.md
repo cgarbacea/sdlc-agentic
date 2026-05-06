@@ -78,34 +78,15 @@ A recruiter or client looking at the GitHub repo in 30 seconds should understand
 
 ### Tasks
 
-- [ ] Install `mcp` Python SDK: `pip install mcp`
-- [ ] Create `mcp_server.py`:
-
-  ```python
-  from mcp.server import Server
-  from mcp.server.stdio import stdio_server
-
-  app = Server("sdlc-pipeline")
-
-  @app.tool()
-  async def run_sdlc_pipeline(feature_description: str, thread_id: str) -> str:
-      # invoke LangGraph pipeline
-      ...
-
-  @app.tool()
-  async def get_pipeline_status(thread_id: str) -> str:
-      # get_state() for a paused thread
-      ...
-
-  @app.tool()
-  async def approve_plan(thread_id: str, corrections: str = "") -> str:
-      # update_state + resume
-      ...
-  ```
-
-- [ ] Register it in VS Code `mcp.json` locally — test that Copilot can call `run_sdlc_pipeline`
-- [ ] Write a `Dockerfile` for the MCP server so it can run in CI/CD
+- [x] Install `mcp` Python SDK (FastMCP v1.27.0)
+- [x] Create `mcp_server.py` with 4 tools: `start_pipeline`, `get_pipeline_state`, `approve_plan`, `list_threads`
+- [x] Lazy pipeline loading — fast MCP handshake, model loads on first tool call
+- [x] Logging to stderr only (MCP servers must not pollute stdout)
+- [x] Register in `.vscode/mcp.json` — Copilot can call tools from this workspace
+- [x] `Dockerfile` (multi-stage, non-root user) + `.dockerignore`
+- [x] 5 MCP smoke tests — 12/12 passing total
 - [ ] Tag `v0.3.0-mcp-server`
+- [ ] Screen recording: Copilot calls `start_pipeline` live (the "wow demo")
 
 ### Concepts you will solidify
 

@@ -1,0 +1,28 @@
+# Runtime state — never bake into the image
+.checkpoints/
+rag_db/
+*.db
+
+# Python virtualenv — dependencies installed via requirements.txt in Docker
+venv/
+.venv/
+
+# Dev/test artefacts
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tests/
+
+# Secrets — never in Docker image
+.env
+.env.*
+
+# Git
+.git/
+.gitignore
+
+# Editor
+.vscode/
