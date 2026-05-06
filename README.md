@@ -25,23 +25,23 @@ graph TD
 
 ## What Each Node Does
 
-| Node | Role | Output |
-|---|---|---|
-| `planner_node` | Lead Architect | Confluence PRD, Jira tickets, architectural plan |
-| `fe_executor_node` | Frontend Developer | React/TypeScript components written to FE repo |
-| `be_executor_node` | Backend Developer | FastAPI endpoints written to BE repo |
-| `test_executor_node` | QA Engineer | pytest + vitest tests for generated code |
-| `qa_executor_node` | QA Architect | Structured PASS/FAIL report against coding guidelines |
-| `infra_executor_node` | DevOps Engineer | Dockerfiles and docker-compose |
+| Node                  | Role               | Output                                                |
+| --------------------- | ------------------ | ----------------------------------------------------- |
+| `planner_node`        | Lead Architect     | Confluence PRD, Jira tickets, architectural plan      |
+| `fe_executor_node`    | Frontend Developer | React/TypeScript components written to FE repo        |
+| `be_executor_node`    | Backend Developer  | FastAPI endpoints written to BE repo                  |
+| `test_executor_node`  | QA Engineer        | pytest + vitest tests for generated code              |
+| `qa_executor_node`    | QA Architect       | Structured PASS/FAIL report against coding guidelines |
+| `infra_executor_node` | DevOps Engineer    | Dockerfiles and docker-compose                        |
 
 ---
 
 ## Three Layers of Agent Control (Defense in Depth)
 
-| Layer | What it does | Where it lives |
-|---|---|---|
-| **Prompts** | Persona and rules for each executor | `prompts/*.md` |
-| **RAG** | Company knowledge base — coding standards, guidelines | `rag_db/`, `docs/*.md` |
+| Layer            | What it does                                             | Where it lives         |
+| ---------------- | -------------------------------------------------------- | ---------------------- |
+| **Prompts**      | Persona and rules for each executor                      | `prompts/*.md`         |
+| **RAG**          | Company knowledge base — coding standards, guidelines    | `rag_db/`, `docs/*.md` |
 | **Orchestrator** | Hard structural check — QA executor validates all output | `nodes/qa_executor.py` |
 
 ---
@@ -85,6 +85,7 @@ python main.py
 ```
 
 The pipeline will:
+
 1. Ask you for a feature description
 2. Run the Planner and show you the generated plan
 3. **Pause at Gate 1** — you review, approve, or correct the plan
@@ -141,15 +142,15 @@ sdlc-agentic/
 
 ## Roadmap
 
-| Phase | Status | Description |
-|---|---|---|
-| POC Pipeline | ✅ Done | 6-node sequential pipeline working |
-| HITL Gate 1 | 🔲 Next | Interactive plan approval loop |
-| MCP Server | 🔲 Planned | Expose pipeline as GitHub Copilot tool |
-| Real Git / PRs | 🔲 Planned | Agent opens real GitHub PRs |
+| Phase                  | Status     | Description                             |
+| ---------------------- | ---------- | --------------------------------------- |
+| POC Pipeline           | ✅ Done    | 6-node sequential pipeline working      |
+| HITL Gate 1            | 🔲 Next    | Interactive plan approval loop          |
+| MCP Server             | 🔲 Planned | Expose pipeline as GitHub Copilot tool  |
+| Real Git / PRs         | 🔲 Planned | Agent opens real GitHub PRs             |
 | Java / Spring Modulith | 🔲 Planned | Agent generates ArchUnit-compliant Java |
-| Observability | 🔲 Planned | LangSmith tracing + structured logs |
-| Golden Templates | 🔲 Planned | cookiecutter scaffold for new projects |
+| Observability          | 🔲 Planned | LangSmith tracing + structured logs     |
+| Golden Templates       | 🔲 Planned | cookiecutter scaffold for new projects  |
 
 See [guideline/career_plan.md](guideline/career_plan.md) for the full roadmap.
 
