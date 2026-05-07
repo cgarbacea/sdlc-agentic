@@ -193,16 +193,36 @@ The requirements mention Spring Modulith, jMolecule, and ArchUnit by name. These
     - `GET /actuator/health` → `{"status": "UP"}`
     - `GET /api/v1/users` → HTTP 401 (Keycloak JWT required)
     - `GET /actuator/modulith` → Spring Modulith module graph (users + shared)
-- [ ] ArchUnit test suite (5+ rules enforced)
-- [ ] Spring Modulith @ApplicationModuleTest (verify workspaces cannot import users.domain)
-- [ ] `workspaces` module (domain + event listener for UserCreatedEvent)
-- [ ] `notifications` module
-- [ ] Tag `v1.0.0` on backend-modulith
+- [x] **ArchUnit — 5 rules that break the build on violation:**
+    1. Domain must not depend on Spring framework
+    2. Controllers must not access infrastructure directly (bypass service layer)
+    3. `workspaces` must not import `users.domain` classes
+    4. `notifications` must not import other modules' domain classes
+    5. REST controllers must live in `api/` packages
+- [x] **Spring Modulith structure test:**
+    - `verifyModuleBoundaries()` — scans codebase, fails on any violation
+    - `verifyModuleCount()` — confirms module presence
+    - Caught a real violation during development (events in wrong package) — forced correct architecture
+- [x] **Events properly exposed via `@NamedInterface`:**
+    - `UserCreatedEvent`, `UserDeactivatedEvent` moved to `users/events/` package
+    - `@NamedInterface("events")` declares the public cross-module contract
+    - `workspaces` may import `users.events` — NOT `users.domain`
+- [x] **`workspaces` module — event-driven, hexagonal:**
+    - `Workspace` @AggregateRoot (tenant_id, owner_user_id)
+    - `WorkspaceCreatedEvent` @DomainEvent
+    - `WorkspaceRepository` port interface
+    - `WorkspaceService` with `@ApplicationModuleListener` on `UserCreatedEvent`
+      (transactional outbox — guaranteed delivery via `event_publication` table)
+    - `JpaWorkspaceRepository` (package-private adapter)
+    - Liquibase: `002_create_workspaces_table.sql`
+- [x] **Tagged `v1.0.0`** → https://github.com/cgarbacea/backend-modulith/releases/tag/v1.0.0
+- [ ] `notifications` module (listens to UserCreatedEvent + WorkspaceCreatedEvent)
+- [ ] RBAC entity classes (Role, Permission, UserRole) so permission queries work in JPA
 
 ### Artefact
 
-- GitHub repo `order-service` with: architecture diagram, ArchUnit tests, jMolecule annotations, Spring Modulith module graph (auto-generated — Modulith can render this as a diagram)
-- This repo is your "Java architecture portfolio piece"
+- **`backend-modulith` at v1.0.0** — real production BE with: Spring Modulith boundaries, ArchUnit enforcement, jMolecule DDD annotations, Keycloak JWT auth, Liquibase migrations, hexagonal architecture, event-driven cross-module communication
+- This is the "Java architecture portfolio piece" from the career plan — built against a real FE (platform-monorepo) with real schema (migrated from existing microservices)
 
 ---
 
