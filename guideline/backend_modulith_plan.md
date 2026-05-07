@@ -22,19 +22,19 @@ the admin-portal frontend actually needs and implementing them correctly.
 
 ## Technology Stack
 
-| Concern | Choice | Reason |
-|---|---|---|
-| Language | Java 25 (Temurin) | Latest, installed, non-LTS but production-ready |
-| Framework | Spring Boot 3.5.0 | Current GA, supports Java 25 |
-| Module boundaries | Spring Modulith 1.4.11 | Enforced at test time, generates module graph |
-| DDD vocabulary | jMolecules 2023.2.3 | Annotations: @AggregateRoot, @DomainEvent, @BoundedContext |
-| Architecture rules | ArchUnit 1.3.0 | Breaks build on violations |
-| Auth (local dev) | Keycloak 26 (Docker) | Replaces Cognito; OAuth2/OIDC |
-| Auth (Spring) | spring-boot-starter-oauth2-resource-server | Validates Keycloak JWTs |
-| Database | PostgreSQL 15 (local Homebrew, port 5432) | Already running, no Docker needed |
-| Migrations | Liquibase | Reuse existing SQL from old microservices (Liquibase format) |
-| Build | Maven (via mvnw wrapper) | Already scaffolded |
-| Inter-module events | Spring ApplicationEventPublisher (sync) → Spring Modulith EventPublication (async) | Hexagonal: modules don't import each other |
+| Concern             | Choice                                                                             | Reason                                                       |
+| ------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Language            | Java 25 (Temurin)                                                                  | Latest, installed, non-LTS but production-ready              |
+| Framework           | Spring Boot 3.5.0                                                                  | Current GA, supports Java 25                                 |
+| Module boundaries   | Spring Modulith 1.4.11                                                             | Enforced at test time, generates module graph                |
+| DDD vocabulary      | jMolecules 2023.2.3                                                                | Annotations: @AggregateRoot, @DomainEvent, @BoundedContext   |
+| Architecture rules  | ArchUnit 1.3.0                                                                     | Breaks build on violations                                   |
+| Auth (local dev)    | Keycloak 26 (Docker)                                                               | Replaces Cognito; OAuth2/OIDC                                |
+| Auth (Spring)       | spring-boot-starter-oauth2-resource-server                                         | Validates Keycloak JWTs                                      |
+| Database            | PostgreSQL 15 (local Homebrew, port 5432)                                          | Already running, no Docker needed                            |
+| Migrations          | Liquibase                                                                          | Reuse existing SQL from old microservices (Liquibase format) |
+| Build               | Maven (via mvnw wrapper)                                                           | Already scaffolded                                           |
+| Inter-module events | Spring ApplicationEventPublisher (sync) → Spring Modulith EventPublication (async) | Hexagonal: modules don't import each other                   |
 
 ---
 
@@ -44,22 +44,22 @@ the admin-portal frontend actually needs and implementing them correctly.
 ┌─────────────────────────────────────────────────────────────┐
 │  Module: users                                              │
 │                                                             │
-│  domain/         ← pure Java, no Spring, no JPA            │
-│    User.java     ← @AggregateRoot (jMolecule)              │
-│    UserCreatedEvent.java ← @DomainEvent                    │
-│    UserRepository.java   ← interface (port)                │
+│  domain/         ← pure Java, no Spring, no JPA             │
+│    User.java     ← @AggregateRoot (jMolecule)               │
+│    UserCreatedEvent.java ← @DomainEvent                     │
+│    UserRepository.java   ← interface (port)                 │
 │                                                             │
-│  application/    ← use cases, orchestrates domain          │
-│    UserService.java  ← @ApplicationService                 │
+│  application/    ← use cases, orchestrates domain           │
+│    UserService.java  ← @ApplicationService                  │
 │    CreateUserCommand.java                                   │
 │                                                             │
-│  infrastructure/ ← JPA adapters, Keycloak adapter          │
-│    JpaUserRepository.java  ← implements UserRepository     │
-│    KeycloakUserAdapter.java ← calls Keycloak Admin API     │
+│  infrastructure/ ← JPA adapters, Keycloak adapter           │
+│    JpaUserRepository.java  ← implements UserRepository      │
+│    KeycloakUserAdapter.java ← calls Keycloak Admin API      │
 │                                                             │
-│  api/            ← REST controllers, DTOs                  │
-│    UserController.java  ← @RestController                  │
-│    UserResponse.java    ← record (no domain leakage)       │
+│  api/            ← REST controllers, DTOs                   │
+│    UserController.java  ← @RestController                   │
+│    UserResponse.java    ← record (no domain leakage)        │
 └─────────────────────────────────────────────────────────────┘
          │ publishes UserCreatedEvent
          ▼
@@ -72,6 +72,7 @@ the admin-portal frontend actually needs and implementing them correctly.
 ```
 
 **The rule enforced by ArchUnit + Spring Modulith:**
+
 - `workspaces` may NOT import anything from `users.domain`, `users.application`, or `users.infrastructure`
 - `workspaces` MAY import `users.api` package (public API surface only)
 - All cross-module communication goes via domain events
@@ -81,27 +82,31 @@ the admin-portal frontend actually needs and implementing them correctly.
 ## Modules to Build (Scope)
 
 ### Module 1: `users`
+
 **Reuses from:** `user-management-service`
 
-| What | Source |
-|---|---|
-| User entity + phone_numbers table | `migrations/release-1/schema/001–007_*.sql` |
-| Privacy policy tables | `003_create_user_privacy_policy_tables_ddl.sql` |
-| UserProfileDto shape | `dto/UserProfileDto.java`, `LightUserProfileDto.java` |
-| Role/permission model | `dto/UserPermissionDto.java` |
-| Theme preference | New — connects to dark mode toggle in FE |
+| What                              | Source                                                |
+| --------------------------------- | ----------------------------------------------------- |
+| User entity + phone_numbers table | `migrations/release-1/schema/001–007_*.sql`           |
+| Privacy policy tables             | `003_create_user_privacy_policy_tables_ddl.sql`       |
+| UserProfileDto shape              | `dto/UserProfileDto.java`, `LightUserProfileDto.java` |
+| Role/permission model             | `dto/UserPermissionDto.java`                          |
+| Theme preference                  | New — connects to dark mode toggle in FE              |
 
 **Keycloak integration:**
+
 - On user creation: call Keycloak Admin REST API to create the user in the realm
 - JWT validation: Spring resource server validates tokens issued by Keycloak
 - Replace `CognitoIdentityAdaptorImpl` with `KeycloakIdentityAdapter`
 
 **Events published:**
+
 - `UserCreatedEvent` → consumed by `workspaces` (create default workspace)
 - `UserDeactivatedEvent` → consumed by `notifications`
 - `ThemePreferenceChangedEvent` → consumed by nobody (stored only)
 
 **REST API (consumed by admin-portal):**
+
 ```
 GET  /api/v1/users/me              → current user profile
 PUT  /api/v1/users/me/profile      → update display name, avatar
@@ -114,18 +119,22 @@ POST /api/v1/users/invite          → invite user by email via Keycloak
 ---
 
 ### Module 2: `workspaces`
+
 **Reuses from:** `tenant-configuration-service` (partial)
 
 Simplified scope — we don't rebuild full tenant config. Just:
+
 - Workspace = a named container users belong to (maps to "tenant" concept)
 - One user may belong to multiple workspaces
 - Default workspace auto-created when a user is created (via UserCreatedEvent)
 
 **Events published:**
+
 - `UserAddedToWorkspaceEvent`
 - `WorkspaceCreatedEvent`
 
 **REST API:**
+
 ```
 GET  /api/v1/workspaces            → list workspaces for current user
 POST /api/v1/workspaces            → create workspace
@@ -136,17 +145,20 @@ POST /api/v1/workspaces/{id}/members → add member
 ---
 
 ### Module 3: `notifications`
+
 **Reuses from:** `user-notification-service` (patterns only, no code copy)
 
 Lightweight — just persists notifications triggered by domain events.
 No email sending in scope for local dev.
 
 **Listens to:**
+
 - `UserCreatedEvent` → persist welcome notification
 - `UserDeactivatedEvent` → persist deactivation notification
 - `UserAddedToWorkspaceEvent` → persist workspace invitation notification
 
 **REST API:**
+
 ```
 GET  /api/v1/notifications         → list notifications for current user
 PUT  /api/v1/notifications/{id}/read
@@ -174,6 +186,7 @@ Admin console: http://localhost:8180
 Admin credentials: admin / admin
 
 **Realm setup (one-time, manual via admin console):**
+
 1. Create realm: `youpage-dev`
 2. Create client: `admin-portal` (public, Authorization Code + PKCE)
    - Valid redirect URIs: `http://localhost:3000/*`
@@ -181,6 +194,7 @@ Admin credentials: admin / admin
 3. Create test user: `dev@youpage.com` / `password`
 
 **Spring resource server config (application-local.yml):**
+
 ```yaml
 spring:
   security:
@@ -204,6 +218,7 @@ GRANT ALL PRIVILEGES ON DATABASE youpage_dev TO youpage_app;
 ```
 
 **application-local.yml:**
+
 ```yaml
 spring:
   datasource:
@@ -215,6 +230,7 @@ spring:
 ```
 
 **Migration strategy:**
+
 - Copy relevant SQL from old microservices into Liquibase changeset format
 - Start with `user-management-service` migrations (007 SQL files from release-1/schema)
 - Adapt: remove Cognito-specific columns, add `keycloak_id` column instead
@@ -260,6 +276,7 @@ class ArchitectureTest {
 See `/guideline/keycloak/keycloak_FE_migration.md` for full detail.
 
 **Summary of changes to admin-portal:**
+
 - Replace current auth provider with `@keycloak/keycloak-js` + React adapter
 - `KeycloakProvider` wraps the app — handles token refresh automatically
 - All API calls include `Authorization: Bearer <access_token>` from Keycloak
@@ -269,18 +286,18 @@ See `/guideline/keycloak/keycloak_FE_migration.md` for full detail.
 
 ## Build Order
 
-| Step | Task | Dependency |
-|---|---|---|
-| 1 | Start Keycloak Docker + create realm/client | None |
-| 2 | Create local PostgreSQL DB | None |
-| 3 | `users` module — domain model + Liquibase migrations | Steps 1, 2 |
-| 4 | `users` module — Keycloak adapter + JWT resource server | Step 1 |
-| 5 | `users` module — REST API + ArchUnit tests | Step 3, 4 |
-| 6 | `workspaces` module — domain + event listener | Step 5 |
-| 7 | `notifications` module | Step 5, 6 |
-| 8 | Spring Modulith integration test (module graph verification) | Step 7 |
-| 9 | FE admin-portal — swap auth to Keycloak | Step 1, 5 |
-| 10 | Wire SDLC pipeline BE executor to know these rules | All |
+| Step | Task                                                         | Dependency |
+| ---- | ------------------------------------------------------------ | ---------- |
+| 1    | Start Keycloak Docker + create realm/client                  | None       |
+| 2    | Create local PostgreSQL DB                                   | None       |
+| 3    | `users` module — domain model + Liquibase migrations         | Steps 1, 2 |
+| 4    | `users` module — Keycloak adapter + JWT resource server      | Step 1     |
+| 5    | `users` module — REST API + ArchUnit tests                   | Step 3, 4  |
+| 6    | `workspaces` module — domain + event listener                | Step 5     |
+| 7    | `notifications` module                                       | Step 5, 6  |
+| 8    | Spring Modulith integration test (module graph verification) | Step 7     |
+| 9    | FE admin-portal — swap auth to Keycloak                      | Step 1, 5  |
+| 10   | Wire SDLC pipeline BE executor to know these rules           | All        |
 
 ---
 

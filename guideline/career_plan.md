@@ -172,12 +172,24 @@ The requirements mention Spring Modulith, jMolecule, and ArchUnit by name. These
 
 ### Tasks
 
-- [ ] `order-service` repo: Spring Boot + REST + JPA, clean layered structure
-- [ ] Refactor into Spring Modulith: 3 modules, event-based communication
-- [ ] Add ArchUnit test suite: 5+ enforced rules
-- [ ] Add jMolecule annotations: full DDD vocabulary in code
-- [ ] Add module integration test that proves `inventory` cannot import `orders`
-- [ ] Tag `v1.0.0` on the Java repo
+- [x] Using real domain: `backend-modulith` (YOUPAGE platform BE) instead of toy `order-service`
+- [x] Spring Boot 3.5.0 + Java 25 + Spring Modulith 1.4.11 scaffolded via start.spring.io
+- [x] 3 modules: `users`, `workspaces`, `notifications` (hexagonal, event-driven)
+- [x] pom.xml: ArchUnit 1.3.0 + jMolecules 2.0.0-RC1 added
+- [x] `users/domain/`: User @AggregateRoot, UserStatus, ThemePreference, UserRepository port
+- [x] Domain events: UserCreatedEvent, ThemePreferenceChangedEvent, UserDeactivatedEvent (@DomainEvent records)
+- [x] Liquibase migration 001_create_users_table.sql (adapted from real legacy schema)
+- [x] application.yml + application-local.yml (Keycloak JWT + local PostgreSQL)
+- [x] Compiles clean with Java 25
+- [x] Pushed to https://github.com/cgarbacea/backend-modulith
+- [x] Keycloak 26.2 running on Docker port 8180 — realm youpage-dev, client admin-portal (PKCE)
+- [x] PostgreSQL youpage_dev database created on localhost:5432
+- [ ] JpaUserRepository (infrastructure adapter)
+- [ ] UserService (application use cases)
+- [ ] UserController + DTOs (REST API)
+- [ ] ArchUnit test suite (5+ rules enforced)
+- [ ] Spring Modulith @ApplicationModuleTest (verify workspaces cannot import users.domain)
+- [ ] Tag `v1.0.0` on backend-modulith
 
 ### Artefact
 
