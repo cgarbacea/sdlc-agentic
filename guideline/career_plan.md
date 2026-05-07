@@ -176,19 +176,27 @@ The requirements mention Spring Modulith, jMolecule, and ArchUnit by name. These
 - [x] Spring Boot 3.5.0 + Java 25 + Spring Modulith 1.4.11 scaffolded via start.spring.io
 - [x] 3 modules: `users`, `workspaces`, `notifications` (hexagonal, event-driven)
 - [x] pom.xml: ArchUnit 1.3.0 + jMolecules 2.0.0-RC1 added
-- [x] `users/domain/`: User @AggregateRoot, UserStatus, ThemePreference, UserRepository port
-- [x] Domain events: UserCreatedEvent, ThemePreferenceChangedEvent, UserDeactivatedEvent (@DomainEvent records)
-- [x] Liquibase migration 001_create_users_table.sql (adapted from real legacy schema)
+- [x] `users/domain/`: User @AggregateRoot, UserStatus, UserRepository port (ThemePreference removed — not in FE contract)
+- [x] Domain events: UserCreatedEvent (tenantId), UserDeactivatedEvent (@DomainEvent records)
+- [x] Permission.java: 5 RBAC constants matching FE UserPermission enum exactly
+- [x] Liquibase: 8 changesets — users, user_language_codes, user_certifications, user_specialties, thumbnails, RBAC tables, event_publication, phone_numbers
 - [x] application.yml + application-local.yml (Keycloak JWT + local PostgreSQL)
-- [x] Compiles clean with Java 25
 - [x] Pushed to https://github.com/cgarbacea/backend-modulith
-- [x] Keycloak 26.2 running on Docker port 8180 — realm youpage-dev, client admin-portal (PKCE)
-- [x] PostgreSQL youpage_dev database created on localhost:5432
-- [ ] JpaUserRepository (infrastructure adapter)
-- [ ] UserService (application use cases)
-- [ ] UserController + DTOs (REST API)
+- [x] Keycloak 26.2 running on Docker port 8180 — realm youpage-dev, client admin-portal (PKCE), test user dev@youpage.com
+- [x] PostgreSQL youpage_dev database created on localhost:5432, all 8 changesets applied
+- [x] JpaUserRepository — Spring Data JPA adapter, tenant-aware queries
+- [x] UserService — all use cases: createUser, getById, getByKeycloakId, updateProfile, deactivate etc.
+- [x] UserController — 6 endpoints, X-Tenant-ID header, JWT @AuthenticationPrincipal, ProblemDetail errors
+- [x] UserResponse — matches FE UserProfile TypeScript interface exactly (nested EmailInfo, PhoneInfo)
+- [x] SecurityConfig — stateless JWT resource server, CSRF disabled
+- [x] **Server starts and responds:**
+    - `GET /actuator/health` → `{"status": "UP"}`
+    - `GET /api/v1/users` → HTTP 401 (Keycloak JWT required)
+    - `GET /actuator/modulith` → Spring Modulith module graph (users + shared)
 - [ ] ArchUnit test suite (5+ rules enforced)
 - [ ] Spring Modulith @ApplicationModuleTest (verify workspaces cannot import users.domain)
+- [ ] `workspaces` module (domain + event listener for UserCreatedEvent)
+- [ ] `notifications` module
 - [ ] Tag `v1.0.0` on backend-modulith
 
 ### Artefact
