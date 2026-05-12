@@ -1,3 +1,15 @@
+Just check provider state:
+python main.py --provider-check-only
+
+Check then run pipeline:
+python main.py --provider-check --feature "your feature"
+
+Compile and run
+python3 -m py_compile nodes/be_executor.py main.py graph.py config.py && python3 - <<'PY'
+from nodes.be_executor import _detect_archunit_command
+print('archunit_cmd', _detect_archunit_command())
+PY
+
 Test MCP is on
 
 cd /Users/cgarbacea/Projects/YOUPAGE/sdlc-agentic && source venv/bin/activate && python -c "
@@ -72,3 +84,11 @@ Calling start_pipeline...
   "full_plan": "# Architectural Plan: Dark Mode Toggle Feature\n\n**Document Date:** 06 May 2026  \n**Feature:** Dark Mode Toggle  \n**Lead Architect:** System Architecture Team\n\n---\n\n## 1. Overview\n\nThis document outlin",
   "message": "Plan generated. Review it and call approve_plan(thread_id, corrections='') to proceed, or approve_plan(thread_id, corrections='your changes') to revise."
 }
+
+Restart BE
+
+```bash
+pkill -f "spring-boot:run" 2>/dev/null; sleep 2
+cd /Users/cgarbacea/Projects/YOUPAGE/backend-modulith
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home ./mvnw spring-boot:run -Dspring-boot.run.profiles=local 2>&1 | tee /tmp/backend.log &
+```

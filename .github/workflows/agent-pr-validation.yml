@@ -1,0 +1,54 @@
+name: Agent PR Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      # Change this to your backend module path in the target monorepo.
+      BACKEND_PATH: backend-modulith
+      # Override if your ArchUnit test command differs.
+      ARCHUNIT_CMD: ./mvnw -q -Dtest=*ArchUnit* test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Python sanity compile (agent pipeline files)
+        run: |
+          python -m py_compile main.py config.py llm_factory.py graph.py nodes/be_executor.py
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Run ArchUnit validation in backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -d "$BACKEND_PATH" ]]; then
+            echo "Backend path '$BACKEND_PATH' not found. Set env.BACKEND_PATH for your monorepo layout."
+            exit 1
+          fi
+          cd "$BACKEND_PATH"
+          if [[ ! -x "./mvnw" && ! -f "./mvnw" ]]; then
+            echo "mvnw not found under '$BACKEND_PATH'. Update ARCHUNIT_CMD for your project."
+            exit 1
+          fi
+          echo "Running: $ARCHUNIT_CMD"
+          bash -lc "$ARCHUNIT_CMD"

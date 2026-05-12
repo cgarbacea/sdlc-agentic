@@ -115,7 +115,7 @@ A recruiter or client looking at the GitHub repo in 30 seconds should understand
 - [x] `tests/test_git_tools.py`: 7 tests (offline, no GitHub API calls) — 19/19 total passing
 - [ ] GitHub Actions workflow in target monorepo (runs tests on PR, posts results as comment)
 - [ ] Webhook handler — triggers new LangGraph thread on "request changes" review
-- [ ] Tag `v0.4.0-real-git`
+- [x] Tag `v0.4.0-real-git`
 
 ### Concepts you will solidify
 
@@ -190,32 +190,78 @@ The requirements mention Spring Modulith, jMolecule, and ArchUnit by name. These
 - [x] UserResponse — matches FE UserProfile TypeScript interface exactly (nested EmailInfo, PhoneInfo)
 - [x] SecurityConfig — stateless JWT resource server, CSRF disabled
 - [x] **Server starts and responds:**
-    - `GET /actuator/health` → `{"status": "UP"}`
-    - `GET /api/v1/users` → HTTP 401 (Keycloak JWT required)
-    - `GET /actuator/modulith` → Spring Modulith module graph (users + shared)
+  - `GET /actuator/health` → `{"status": "UP"}`
+  - `GET /api/v1/users` → HTTP 401 (Keycloak JWT required)
+  - `GET /actuator/modulith` → Spring Modulith module graph (users + shared)
 - [x] **ArchUnit — 5 rules that break the build on violation:**
-    1. Domain must not depend on Spring framework
-    2. Controllers must not access infrastructure directly (bypass service layer)
-    3. `workspaces` must not import `users.domain` classes
-    4. `notifications` must not import other modules' domain classes
-    5. REST controllers must live in `api/` packages
+  1. Domain must not depend on Spring framework
+  2. Controllers must not access infrastructure directly (bypass service layer)
+  3. `workspaces` must not import `users.domain` classes
+  4. `notifications` must not import other modules' domain classes
+  5. REST controllers must live in `api/` packages
 - [x] **Spring Modulith structure test:**
-    - `verifyModuleBoundaries()` — scans codebase, fails on any violation
-    - `verifyModuleCount()` — confirms module presence
-    - Caught a real violation during development (events in wrong package) — forced correct architecture
+  - `verifyModuleBoundaries()` — scans codebase, fails on any violation
+  - `verifyModuleCount()` — confirms module presence
+  - Caught a real violation during development (events in wrong package) — forced correct architecture
 - [x] **Events properly exposed via `@NamedInterface`:**
-    - `UserCreatedEvent`, `UserDeactivatedEvent` moved to `users/events/` package
-    - `@NamedInterface("events")` declares the public cross-module contract
-    - `workspaces` may import `users.events` — NOT `users.domain`
+  - `UserCreatedEvent`, `UserDeactivatedEvent` moved to `users/events/` package
+  - `@NamedInterface("events")` declares the public cross-module contract
+  - `workspaces` may import `users.events` — NOT `users.domain`
 - [x] **`workspaces` module — event-driven, hexagonal:**
-    - `Workspace` @AggregateRoot (tenant_id, owner_user_id)
-    - `WorkspaceCreatedEvent` @DomainEvent
-    - `WorkspaceRepository` port interface
-    - `WorkspaceService` with `@ApplicationModuleListener` on `UserCreatedEvent`
-      (transactional outbox — guaranteed delivery via `event_publication` table)
-    - `JpaWorkspaceRepository` (package-private adapter)
-    - Liquibase: `002_create_workspaces_table.sql`
+  - `Workspace` @AggregateRoot (tenant_id, owner_user_id)
+  - `WorkspaceCreatedEvent` @DomainEvent
+  - `WorkspaceRepository` port interface
+  - `WorkspaceService` with `@ApplicationModuleListener` on `UserCreatedEvent`
+    (transactional outbox — guaranteed delivery via `event_publication` table)
+  - `JpaWorkspaceRepository` (package-private adapter)
+  - Liquibase: `002_create_workspaces_table.sql`
 - [x] **Tagged `v1.0.0`** → https://github.com/cgarbacea/backend-modulith/releases/tag/v1.0.0
+
+### Keycloak PKCE + FE Integration (admin-portal wired to backend-modulith)
+
+- [x] **Auth.js (next-auth v5 beta)** installed in admin-portal
+  - Keycloak provider (PKCE, public client — no client secret)
+  - `jwt` callback persists Keycloak `access_token` + token refresh logic
+  - Token expiry check with 30s buffer — calls `refreshKeycloakToken()` before expiry
+  - On `RefreshTokenExpired` error → `signIn('keycloak')` triggers re-login
+  - `session` callback exposes `session.accessToken` to client
+- [x] `auth.ts` + `app/api/auth/[...nextauth]/route.ts` created
+- [x] `AppProviders.tsx` — `SessionProvider` + `SessionBridge` (mounts `useKeycloakSession`)
+  - `refetchInterval={0}`, `refetchOnWindowFocus={false}` — stops `/api/auth/session` polling loop
+- [x] `useKeycloakSession.ts` — bridges Auth.js session into legacy Zustand `authStore`
+  - Uses stable Zustand selectors to prevent infinite re-render loops
+  - Syncs `accessToken` cookie for middleware/proxy compatibility
+- [x] `LoginForm.tsx` rewritten — single "Log in" button calls `signIn('keycloak')`
+- [x] `proxy.ts` — recognises both legacy `accessToken` cookie AND `next-auth.session-token`
+- [x] `.env.local` — `AUTH_SECRET`, `AUTH_KEYCLOAK_ID`, `AUTH_KEYCLOAK_ISSUER`, `API_BASE_URL`, `TENANT_ID`
+
+### LegacyApiController — Full FE ↔ BE Compatibility Layer
+
+- [x] **GET /user-management/users/profile** — auto-provisions user on first Keycloak login
+  - `UserProvisioningService.getOrProvision()` — creates user from JWT claims, records login
+  - Defaults tenant to dev UUID when `X-Tenant-ID` header missing
+- [x] **PATCH /user-management/users/profile** — partial update (all fields optional)
+  - `PatchProfileRequest` record — only non-null fields applied
+- [x] **GET /user-management/dictionaries?types=...** — static lookup data for FE dropdowns
+  - GENDERS, TIME_ZONES (all JVM zone IDs), LANGUAGES, SIZE_LIMITS, COACH_ONBOARDING_ROLES
+- [x] **GET /user-management/users/terms-and-conditions** — HTML content (text/html + application/octet-stream)
+- [x] **GET /user-management/users/photo?isSecondary=** — serves stored photo blob (404 if none)
+- [x] **POST /user-management/users/photo?isSecondary=** — multipart upload, saves to local disk, returns `{photoUrl}`
+- [x] **SecurityConfig** — CORS (`localhost:3000/3001`), OPTIONS preflight permitted, JWT resource server
+- [x] **WorkspaceService** — `@TransactionalEventListener` fixed to `REQUIRES_NEW` propagation
+- [x] All endpoints tested end-to-end with real Keycloak JWTs — HTTP 200 confirmed
+
+### Commits since v1.0.0
+
+- `dab1c04` — feat: CORS, auto-provisioning, legacy /user-management/users/profile
+- `39a269f` — fix: permit OPTIONS preflight requests for CORS
+- `1d3df05` — fix: WorkspaceService @TransactionalEventListener requires REQUIRES_NEW
+- `229017c` — feat: GET /user-management/dictionaries legacy endpoint
+- `41cd0b8` — feat: PATCH /user-management/users/profile partial update endpoint
+- `f6ea512` — feat: GET /user-management/users/terms-and-conditions placeholder HTML
+- `73f0008` — feat: GET+POST /user-management/users/photo endpoints
+- `c0c1609` — fix: terms-and-conditions accepts application/octet-stream (406 fix)
+
 - [ ] `notifications` module (listens to UserCreatedEvent + WorkspaceCreatedEvent)
 - [ ] RBAC entity classes (Role, Permission, UserRole) so permission queries work in JPA
 
@@ -230,26 +276,46 @@ The requirements mention Spring Modulith, jMolecule, and ArchUnit by name. These
 
 **Goal:** The LangGraph pipeline's BE executor should be capable of generating code that respects Spring Modulith boundaries, jMolecule annotations, and ArchUnit rules. This is the "AI-native engineering" pillar made real.
 
-### Tasks
+### ✅ Completed — Two-Tier Executor Restructure (11 May 2026)
 
-- [ ] Update `prompts/be_executor.md` to include:
-  - Spring Modulith module structure rules
-  - jMolecule annotation requirements
-  - "Do not cross module boundaries — use events via `ApplicationEventPublisher`"
-- [ ] Add `docs/java_architecture_guidelines.md` to the RAG knowledge base — index the rules the BE executor must follow
-- [ ] Add a post-generation step: run ArchUnit tests against generated code; if they fail, feed the failure back to the BE executor for a retry
-- [ ] This creates a **feedback loop**: Agent generates code → ArchUnit validates → if fail, agent sees the error and tries again
-- [ ] Tag `v0.5.0-java-aware`
+Before wiring the pipeline to the Java service, the executor prompt architecture was overhauled to make it scalable:
+
+- **Problem:** Fat executor prompts (~2,356 lines total) were loading all code examples into context on every call — wasteful and hitting context limits on complex tasks.
+- **Solution:** Two-tier architecture — slim prompts (~320 lines total, 86% reduction) + RAG knowledge base.
+
+**What was built:**
+
+- `docs/` knowledge base: 49 files across `be/`, `fe/`, `be_module/`, `infra/` — every code pattern, architecture example, and decision rule extracted from the fat prompts
+- ChromaDB index: 219 chunks, sentence-transformers/all-MiniLM-L6-v2 embeddings
+- 5/5 retrieval queries verified correct before proceeding
+- All 4 executor prompts slimmed: role + when-to-use table + KB search gate (explicit `search_company_knowledge_base` instruction) + clean code bullets + strict scope rules
+- Integration confirmed: `agent.log.txt` shows `[RAG SEARCH]` calls firing from executors in production runs
+
+**Next observation:** Planner generates verbose inline code in architectural plans — violates separation of concerns. Tracked as SDLC workflow restructure (Phase 5 continuation).
+
+### Remaining Tasks
+
+- [x] Planner-first flow removed; planner node is now legacy and not wired by the runtime graph
+- [x] Pipeline separated into distinct phases: Requirements → Architecture Plan → Execution
+- [x] Add `docs/be/be_spring_archunit_rules.md`
+- [x] Add a post-generation step: run ArchUnit tests against generated code; feed failures back to the BE executor for a retry
+- [x] Feedback loop implemented: Agent generates code → ArchUnit validates → on failure, BE executor retries with validation failure context
+- [x] Hard-fail behavior added: if retries are exhausted, BE executor raises failure (pipeline does not continue as success)
+- [x] Validation hardening: command execution moved away from `shell=True`; uses argument parsing and direct subprocess invocation
+- [x] Validation startup guard: fail fast when ArchUnit validation is enabled but no command can be detected/configured
+- [x] Tag `v0.5.0-java-aware`
 
 ### Concepts you will solidify
 
 - Closing the code-generation loop with automated validation
 - Using existing test frameworks as agent feedback signals
+- Two-tier prompt architecture: slim context + on-demand RAG retrieval
 - LLM-compatible project structures (what the requirements call out explicitly)
 
 ### Artefact
 
 - Demo: agent generates a new module for the Java service → ArchUnit runs → violations reported → agent fixes → clean build
+- Before/after: executor prompts 2,356 lines → 320 lines, all patterns in retrievable KB
 
 ---
 
@@ -372,12 +438,13 @@ That is the full Technical Architect role. Everything in the requirements docume
 
 ---
 
-## What to Do This Week
+## What to Do Next (Updated)
 
-Focus only on Phase 0. Open the POC repo and do three things:
+You are past foundation and core integration milestones. Prioritize closing Phase 5 and starting Phase 6:
 
-1. Write the `README.md` with the Mermaid architecture diagram
-2. Add `argparse` to `main.py`
-3. Create the `Makefile`
+1. [x] Run one end-to-end proof in non-stub mode that exercises: ArchUnit fail → BE retry → ArchUnit pass.
+2. [x] Add one CI workflow in the target monorepo to validate agent-opened PRs.
+3. [x] Add LangSmith tracing and structured JSON logs in the Python pipeline.
+4. [ ] Tag `v0.5.0-java-aware` after capturing the successful demo run.
 
-Do not touch Java yet. Do not start the MCP server yet. Finish the foundation first. A clean, documented POC is worth more than 5 half-finished features.
+The highest leverage next win is: generated BE change → ArchUnit failure captured → agent retry → green validation.

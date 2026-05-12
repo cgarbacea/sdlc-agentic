@@ -32,15 +32,11 @@ import sys
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from observability import configure_observability
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 # MCP servers communicate over stdio; logging MUST go to stderr only.
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%S",
-    stream=sys.stderr,
-)
+configure_observability("sdlc.mcp")
 log = logging.getLogger("sdlc.mcp")
 
 # ── Lazy pipeline import ──────────────────────────────────────────────────────

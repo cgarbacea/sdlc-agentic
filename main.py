@@ -2,22 +2,22 @@ import argparse
 import logging
 import sys
 
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
 
 from config import FE_REPO_PATH, BE_REPO_PATH
 from graph import app
+from observability import configure_observability
+from llm_factory import (
+    get_llm,
+    is_stub_mode,
+    get_provider_name,
+    get_provider_report,
+)
 from state import SDLCState
 from tools.rag import index_plan
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%S",
-)
+configure_observability("sdlc.cli")
 log = logging.getLogger(__name__)
-
-_llm = ChatAnthropic(model="claude-sonnet-4-5", temperature=0.1)
 
 
 def _rewrite_plan_with_corrections(original_plan: str, corrections: str) -> str:
@@ -26,8 +26,19 @@ def _rewrite_plan_with_corrections(original_plan: str, corrections: str) -> str:
     incorporates the human's corrections. The executor receives this
     unified plan with no contradictions.
     """
+    if is_stub_mode():
+        print(
+            f"\n🔄 [Gate 1] Stub mode rewrite (provider={get_provider_name()}) — appending corrections."
+        )
+        return (
+            f"{original_plan}\n\n"
+            "--- Human Corrections ---\n"
+            f"{corrections}\n"
+        )
+
     print("\n🔄 [Gate 1] Rewriting plan with your corrections...")
-    response = _llm.invoke([HumanMessage(content=f"""
+    llm = get_llm(temperature=0.1)
+    response = llm.invoke([HumanMessage(content=f"""
 You are a Lead Architect. A human reviewer has provided corrections to an architectural plan.
 Rewrite the plan as a single, clean document that fully incorporates the corrections.
 Do not include any commentary about what changed — just produce the updated plan.
@@ -73,11 +84,44 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Auto-approve Gate 1 without prompting (for CI use).",
     )
+    parser.add_argument(
+        "--provider-check",
+        action="store_true",
+        help="Print effective LLM provider and required env checks before running.",
+    )
+    parser.add_argument(
+        "--provider-check-only",
+        action="store_true",
+        help="Print provider/env checks and exit without running the pipeline.",
+    )
     return parser.parse_args()
+
+
+def _print_provider_check() -> None:
+    report = get_provider_report()
+    print("\n🔎 LLM Provider Check")
+    print(f"- Configured provider: {report['configured_provider']}")
+    print(f"- Effective provider: {report['effective_provider']}")
+
+    missing_env_vars = report["missing_env_vars"]
+    if missing_env_vars:
+        print(f"- Missing required env vars: {', '.join(missing_env_vars)}")
+    else:
+        print("- Missing required env vars: none")
+
+    notes = report["notes"]
+    if notes:
+        for note in notes:
+            print(f"- Note: {note}")
 
 
 if __name__ == "__main__":
     args = _parse_args()
+
+    if args.provider_check or args.provider_check_only:
+        _print_provider_check()
+        if args.provider_check_only:
+            sys.exit(0)
 
     print("\n" + "=" * 50)
     print("🤖 Welcome to the Agentic SDLC Workspace")
@@ -103,6 +147,7 @@ if __name__ == "__main__":
 
     initial_state: SDLCState = {
         "user_request": user_input,
+        "requirements": "",
         "prd": "",
         "architect_plan": "",
         "fe_output": "",
@@ -113,10 +158,12 @@ if __name__ == "__main__":
         "pr_urls": [],
     }
 
-    # ── PHASE 1: Run Planner only ──────────────────────────────────────────────
+    # ── PHASE 1: Requirements + Architecture (no code) ──────────────────────────
+    # requirements_node: PRD + Jira tickets
+    # architect_node: API contracts, component names, data models (NO code)
     # Graph pauses automatically at interrupt_before=["fe_executor"] (defined in graph.py)
-    log.info("Starting Planner phase")
-    print("\n🚀 Starting Planner phase...")
+    log.info("Starting Requirements + Architecture phase")
+    print("\n🚀 Starting Requirements + Architecture phase...")
     for output in app.stream(initial_state, config):
         for node_name, _ in output.items():
             log.info("Node completed: %s", node_name)

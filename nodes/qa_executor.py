@@ -1,14 +1,10 @@
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
 from langchain.agents import create_agent
 
 from config import FE_REPO_PATH, BE_REPO_PATH, CURRENT_DATE
+from llm_factory import get_llm, is_stub_mode, get_provider_name
 from state import SDLCState
 from tools import list_directory, read_file, write_file, search_company_knowledge_base
-
-llm = ChatAnthropic(model="claude-sonnet-4-5", temperature=0.1)
-_agent = create_agent(
-    llm, tools=[list_directory, read_file, write_file, search_company_knowledge_base])
 
 
 def _load_prompt(path: str) -> str:
@@ -18,6 +14,14 @@ def _load_prompt(path: str) -> str:
 
 def qa_executor_node(state: SDLCState) -> SDLCState:
     print("\n🔍 [QA Executor] Reviewing code against company standards...")
+
+    if is_stub_mode():
+        msg = (
+            f"Skipped in stub mode (provider={get_provider_name()}). "
+            "No QA review generation executed."
+        )
+        print(f"   ↳ [QA Executor] {msg}")
+        return {"qa_report": msg}
 
     prompt = f"""
     {_load_prompt("prompts/qa_executor.md")}
@@ -34,7 +38,10 @@ def qa_executor_node(state: SDLCState) -> SDLCState:
     """
 
     try:
-        result = _agent.invoke({"messages": [HumanMessage(content=prompt)]})
+        llm = get_llm(temperature=0.1)
+        agent = create_agent(
+            llm, tools=[list_directory, read_file, write_file, search_company_knowledge_base])
+        result = agent.invoke({"messages": [HumanMessage(content=prompt)]})
         qa_report = result["messages"][-1].content
     except Exception as e:
         qa_report = f"QA agent failed: {str(e)}"

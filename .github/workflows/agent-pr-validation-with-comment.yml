@@ -1,0 +1,128 @@
+name: Agent PR Validation (Comment)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      # Change this to your backend module path in the target monorepo.
+      BACKEND_PATH: backend-modulith
+      # Override if your ArchUnit test command differs.
+      ARCHUNIT_CMD: ./mvnw -q -Dtest=*ArchUnit* test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Python sanity compile (agent pipeline files)
+        run: |
+          python -m py_compile main.py config.py llm_factory.py graph.py nodes/be_executor.py
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Run ArchUnit validation in backend
+        id: archunit
+        shell: bash
+        run: |
+          set +e
+
+          if [[ ! -d "$BACKEND_PATH" ]]; then
+            echo "Backend path '$BACKEND_PATH' not found. Set env.BACKEND_PATH for your monorepo layout." > "$RUNNER_TEMP/archunit_output.txt"
+            status=1
+          else
+            cd "$BACKEND_PATH"
+            if [[ ! -x "./mvnw" && ! -f "./mvnw" ]]; then
+              echo "mvnw not found under '$BACKEND_PATH'. Update ARCHUNIT_CMD for your project." > "$RUNNER_TEMP/archunit_output.txt"
+              status=1
+            else
+              echo "Running: $ARCHUNIT_CMD"
+              bash -lc "$ARCHUNIT_CMD" > "$RUNNER_TEMP/archunit_output.txt" 2>&1
+              status=$?
+            fi
+          fi
+
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          {
+            echo "output<<EOF"
+            tail -n 200 "$RUNNER_TEMP/archunit_output.txt"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Comment ArchUnit result on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          ARCHUNIT_STATUS: ${{ steps.archunit.outputs.status }}
+          ARCHUNIT_OUTPUT: ${{ steps.archunit.outputs.output }}
+        with:
+          script: |
+            const marker = '<!-- archunit-validation-comment -->';
+            const status = process.env.ARCHUNIT_STATUS === '0' ? 'PASS' : 'FAIL';
+            const emoji = status === 'PASS' ? '✅' : '❌';
+            const output = (process.env.ARCHUNIT_OUTPUT || '').trim();
+            const body = `${marker}
+            ${emoji} **ArchUnit Validation: ${status}**
+
+            \\`BACKEND_PATH=${process.env.BACKEND_PATH || 'backend-modulith'}\\`
+            \\`ARCHUNIT_CMD=${process.env.ARCHUNIT_CMD || ''}\\`
+
+            <details>
+            <summary>ArchUnit output (last 200 lines)</summary>
+
+            \\`\\`\\`text
+            ${output || '(no output captured)'}
+            \\`\\`\\`
+            </details>`;
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(
+              (c) => c.user?.type === 'Bot' && c.body?.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
+
+      - name: Fail workflow when ArchUnit fails
+        if: steps.archunit.outputs.status != '0'
+        run: |
+          echo "ArchUnit validation failed. See PR comment for details."
+          exit 1

@@ -3,8 +3,9 @@ from typing import TypedDict
 
 class SDLCState(TypedDict):
     user_request: str
+    requirements: str   # Phase 1: PRD + Jira ticket summaries (what to build)
     prd: str
-    architect_plan: str
+    architect_plan: str  # Phase 2: interfaces, API contracts, data models — NO code
     fe_output: str
     be_output: str
     test_output: str

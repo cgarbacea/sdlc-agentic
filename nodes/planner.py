@@ -1,14 +1,46 @@
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
 
 from config import FE_REPO_PATH, BE_REPO_PATH, CURRENT_DATE
+from llm_factory import get_llm, is_stub_mode, get_provider_name
 from state import SDLCState
 from tools import create_jira_ticket, create_confluence_page
 
-llm = ChatAnthropic(model="claude-sonnet-4-5", temperature=0.1)
-
 
 def planner_node(state: SDLCState) -> SDLCState:
+    if is_stub_mode():
+        feature = state["user_request"].strip()
+        print(
+            f"\n🧠 [Planner] Stub mode active (provider={get_provider_name()}).")
+        create_confluence_page.invoke(
+            {
+                "title": f"PRD - {feature[:80]}",
+                "content": f"Feature request: {feature}",
+                "space_key": "ENG",
+            }
+        )
+        create_jira_ticket.invoke(
+            {
+                "title": f"[FE] {feature[:70]}",
+                "description": f"Implement frontend scope for: {feature}",
+                "project_key": "FE",
+            }
+        )
+        create_jira_ticket.invoke(
+            {
+                "title": f"[BE] {feature[:70]}",
+                "description": f"Implement backend scope for: {feature}",
+                "project_key": "BE",
+            }
+        )
+        return {
+            "architect_plan": (
+                "Stub planner output. Replace with requirements_node + architect_node flow.\n\n"
+                f"Feature: {feature}"
+            ),
+            "prd": "PRD generated and saved to Confluence.",
+        }
+
+    llm = get_llm(temperature=0.1)
     print("\n🧠 [Planner] Analyzing request and creating Jira tickets...")
 
     planner_llm = llm.bind_tools([create_jira_ticket, create_confluence_page])
