@@ -93,3 +93,12 @@ LANGSMITH_PROJECT = os.getenv("LANGSMITH_PROJECT", "sdlc-agentic").strip()
 LANGSMITH_ENDPOINT = os.getenv(
     "LANGSMITH_ENDPOINT", "https://api.smith.langchain.com"
 ).strip()
+
+# ── Resilience (Phase 6) ───────────────────────────────────────────────────
+# Retry policy used for transient failures in LLM/tool calls.
+RETRY_MAX_ATTEMPTS = int(os.getenv("RETRY_MAX_ATTEMPTS", "3"))
+RETRY_BASE_DELAY_SECONDS = float(os.getenv("RETRY_BASE_DELAY_SECONDS", "0.5"))
+RETRY_MAX_DELAY_SECONDS = float(os.getenv("RETRY_MAX_DELAY_SECONDS", "4.0"))
+
+# QA escalation threshold (Phase 6 loop breaker)
+QA_ESCALATION_THRESHOLD = int(os.getenv("QA_ESCALATION_THRESHOLD", "3"))

@@ -1,4 +1,4 @@
-.PHONY: help run build-kb test lint fmt install clean
+.PHONY: help run run-health build-kb test lint fmt install clean
 
 PYTHON := python
 VENV   := venv
@@ -12,6 +12,7 @@ help:
 	@echo "  make install     Install all dependencies into the venv"
 	@echo "  make build-kb    Ingest docs/ into the ChromaDB RAG knowledge base"
 	@echo "  make run         Run the pipeline interactively"
+	@echo "  make run-health  Run the FastAPI /health endpoint"
 	@echo "  make test        Run the test suite"
 	@echo "  make lint        Run ruff linter"
 	@echo "  make fmt         Auto-format code with ruff"
@@ -32,6 +33,10 @@ build-kb:
 run:
 	@echo ">>> Starting SDLC pipeline (interactive)..."
 	$(VENV)/bin/python main.py
+
+run-health:
+	@echo ">>> Starting health endpoint on http://127.0.0.1:8081/health ..."
+	$(VENV)/bin/uvicorn health_server:app --host 127.0.0.1 --port 8081
 
 # Run non-interactively in CI — requires FEATURE env var
 # Usage: FEATURE="add dark mode" make ci-run

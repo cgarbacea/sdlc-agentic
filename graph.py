@@ -3,7 +3,7 @@ import logging
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from config import CHECKPOINT_DB_PATH
+from config import CHECKPOINT_DB_PATH, QA_ESCALATION_THRESHOLD
 from state import SDLCState
 from nodes import (
     requirements_node,
@@ -13,6 +13,7 @@ from nodes import (
     test_executor_node,
     qa_executor_node,
     infra_executor_node,
+    human_escalation_node,
 )
 
 log = logging.getLogger(__name__)
@@ -39,13 +40,36 @@ workflow.add_node("be_executor", be_executor_node)
 workflow.add_node("test_executor", test_executor_node)
 workflow.add_node("qa_executor", qa_executor_node)
 workflow.add_node("infra_executor", infra_executor_node)
+workflow.add_node("human_escalation", human_escalation_node)
+
+
+def _route_after_qa(state: SDLCState) -> str:
+    qa_report = (state.get("qa_report") or "").upper()
+    attempts = int(state.get("attempt_count", 0))
+    failed = "FAIL" in qa_report and "PASS" not in qa_report
+
+    if not failed:
+        return "infra_executor"
+    if attempts >= QA_ESCALATION_THRESHOLD:
+        return "human_escalation"
+    return "be_executor"
+
 
 workflow.add_edge("requirements", "architect")
 workflow.add_edge("architect", "fe_executor")
 workflow.add_edge("fe_executor", "be_executor")
 workflow.add_edge("be_executor", "test_executor")
 workflow.add_edge("test_executor", "qa_executor")
-workflow.add_edge("qa_executor", "infra_executor")
+workflow.add_conditional_edges(
+    "qa_executor",
+    _route_after_qa,
+    {
+        "infra_executor": "infra_executor",
+        "be_executor": "be_executor",
+        "human_escalation": "human_escalation",
+    },
+)
+workflow.add_edge("human_escalation", "be_executor")
 workflow.add_edge("infra_executor", END)
 
 workflow.set_entry_point("requirements")
@@ -63,6 +87,7 @@ _checkpointer = _sqlite_ctx.__enter__()
 
 app = workflow.compile(
     checkpointer=_checkpointer,
-    # Gate 1: pause after architect, before any executor
-    interrupt_before=["fe_executor"],
+    # Gate 1: pause after architect, before any executor.
+    # Gate 5: pause before human escalation loop-breaker node.
+    interrupt_before=["fe_executor", "human_escalation"],
 )

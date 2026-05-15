@@ -156,6 +156,8 @@ if __name__ == "__main__":
         "qa_report": "",
         "infra_output": "",
         "pr_urls": [],
+        "attempt_count": 0,
+        "human_escalation": "",
     }
 
     # ── PHASE 1: Requirements + Architecture (no code) ──────────────────────────
@@ -227,10 +229,40 @@ if __name__ == "__main__":
     # ── PHASE 2: Resume — run all executor nodes ───────────────────────────────
     log.info("Resuming pipeline — handing off to executors")
     print("\n🚀 Resuming — handing off to executors...")
-    for output in app.stream(None, config):
-        for node_name, _ in output.items():
-            log.info("Node completed: %s", node_name)
-            print(f"\n✅ [{node_name}] completed.")
+    while True:
+        for output in app.stream(None, config):
+            for node_name, _ in output.items():
+                log.info("Node completed: %s", node_name)
+                print(f"\n✅ [{node_name}] completed.")
+
+        snapshot = app.get_state(config)
+        next_nodes = list(snapshot.next or [])
+        if "human_escalation" not in next_nodes:
+            break
+
+        qa_report = snapshot.values.get("qa_report", "")
+        print("\n" + "=" * 50)
+        print("🆘 GATE 5 — QA ESCALATION")
+        print("=" * 50)
+        print("\nLatest QA report:\n")
+        print(qa_report)
+
+        if args.non_interactive:
+            feedback = (
+                "Auto feedback in non-interactive mode: fix all failing QA checks "
+                "reported above and prioritize deterministic tests and standards compliance."
+            )
+            print("\n✅ [CI] Escalation auto-resolved (--non-interactive).")
+        else:
+            feedback = input(
+                "\nProvide guidance for the agents to fix QA failures:\n> "
+            ).strip()
+            if not feedback:
+                feedback = "Fix all failing QA checks from the latest report."
+
+        app.update_state(config, {"human_escalation": feedback})
+        log.info("Escalation feedback captured; resuming execution")
+        print("\n🔁 Escalation feedback applied — resuming execution...")
 
     final = app.get_state(config).values
     pr_urls = final.get("pr_urls", [])

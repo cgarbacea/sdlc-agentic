@@ -5,6 +5,7 @@ from .be_executor import be_executor_node
 from .test_executor import test_executor_node
 from .qa_executor import qa_executor_node
 from .infra_executor import infra_executor_node
+from .human_escalation import human_escalation_node
 
 __all__ = [
     "requirements_node",
@@ -14,4 +15,5 @@ __all__ = [
     "test_executor_node",
     "qa_executor_node",
     "infra_executor_node",
+    "human_escalation_node",
 ]

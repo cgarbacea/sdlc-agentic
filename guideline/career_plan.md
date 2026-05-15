@@ -327,11 +327,12 @@ Before wiring the pipeline to the Java service, the executor prompt architecture
 
 **Python pipeline (LangGraph)**
 
-- [ ] Add LangSmith tracing — every LLM call, tool call, and node transition is logged
-- [ ] Add structured logging with `structlog` — JSON logs that can be ingested by Datadog/Splunk
-- [ ] Add a health check endpoint (FastAPI, 3 lines) for the MCP server
-- [ ] Add retry logic to all tool calls (exponential backoff, max 3 attempts)
-- [ ] Add an escalation node: if QA fails 3 times, pause and alert a human rather than looping forever
+- [x] Add LangSmith tracing — every LLM call, tool call, and node transition is logged
+- [x] Add structured logging with `structlog` — JSON logs that can be ingested by Datadog/Splunk
+- [x] Add a health check endpoint (FastAPI, 3 lines) for the MCP server
+- [x] Add retry logic to all tool calls (exponential backoff, max 3 attempts)
+- [x] Add an escalation node: if QA fails 3 times, pause and alert a human rather than looping forever
+- [x] Add a focused integration test that guards QA FAIL -> escalation pause -> feedback resume in CI
 
 **Java service**
 
@@ -440,11 +441,21 @@ That is the full Technical Architect role. Everything in the requirements docume
 
 ## What to Do Next (Updated)
 
-You are past foundation and core integration milestones. Prioritize closing Phase 5 and starting Phase 6:
+You are past the core integration milestones and now entering production-hardening execution.
+
+### Recently completed
 
 1. [x] Run one end-to-end proof in non-stub mode that exercises: ArchUnit fail → BE retry → ArchUnit pass.
 2. [x] Add one CI workflow in the target monorepo to validate agent-opened PRs.
 3. [x] Add LangSmith tracing and structured JSON logs in the Python pipeline.
-4. [ ] Tag `v0.5.0-java-aware` after capturing the successful demo run.
+4. [x] Tag `v0.5.0-java-aware`.
+5. [x] Add a focused integration test for the QA escalation loop-breaker.
 
-The highest leverage next win is: generated BE change → ArchUnit failure captured → agent retry → green validation.
+### Next highest-leverage actions (Phase 6)
+
+1. [ ] Capture one polished demo evidence pack (logs + screenshot/video) showing the ArchUnit retry loop end-to-end.
+2. [ ] Finish Java observability hardening: Spring Actuator, Micrometer metrics, and OpenTelemetry tracing.
+3. [ ] Capture a short observability screenshot set for the Python pipeline and Java service once metrics are wired.
+4. [ ] Start Phase 7 by packaging the LangGraph agent and Spring Modulith patterns into reusable templates.
+
+The highest-leverage immediate win is still the demo evidence pack, because it converts technical progress into a reusable portfolio artefact.

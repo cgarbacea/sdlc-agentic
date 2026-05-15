@@ -1,260 +1,167 @@
 # SDLC Agentic Workflow
 
-A LangGraph-powered multi-agent pipeline that automates the full Software Development Life Cycle (SDLC) using **Claude Sonnet 4.5** as the underlying LLM — from plain-English feature request to deployed, reviewed code.
+A LangGraph-powered multi-agent pipeline that automates the Software Development Life Cycle (SDLC) from plain-English request to generated code, QA output, and infrastructure artifacts.
 
 ---
 
-## Current Status
+## Runtime Status (As Implemented)
 
-| Capability                             | Status                            |
-| -------------------------------------- | --------------------------------- |
-| Natural language prompt input          | ✅ POC — working                  |
-| Mocked Jira + Confluence tools         | ✅ POC — writes local `.md` files |
-| Real filesystem read/write to monorepo | ✅ POC — working                  |
-| RAG knowledge base (ChromaDB)          | ✅ POC — working                  |
-| 6-node sequential executor pipeline    | ✅ POC — working                  |
-| HITL Gate 1 — Planner approval         | 🔲 Phase 1 — not yet implemented  |
-| Real Git branches + GitHub PRs         | 🔲 Phase 2 — not yet implemented  |
-| PR comment → agent feedback loop       | 🔲 Phase 3 — not yet implemented  |
-| Production hardening                   | 🔲 Phase 4 — not yet implemented  |
-| Loop breaker / escalation node         | 🔲 Phase 5 — not yet implemented  |
-| DevOps / infra approval gate           | 🔲 Phase 6 — not yet implemented  |
-| Visual UI/UX preview check             | 🔲 Phase 7 — not yet implemented  |
+| Capability                                      | Status                                                                  |
+| ----------------------------------------------- | ----------------------------------------------------------------------- |
+| Natural language feature input                  | ✅ Implemented                                                          |
+| Requirements and architecture split             | ✅ Implemented (`requirements` -> `architect`)                          |
+| Gate 1 HITL plan approval                       | ✅ Implemented (`interrupt_before=["fe_executor"]`)                     |
+| Persistent checkpoint state                     | ✅ Implemented (SQLite checkpointer)                                    |
+| RAG knowledge base (ChromaDB)                   | ✅ Implemented                                                          |
+| FE -> BE -> Test -> QA -> Infra execution chain | ✅ Implemented                                                          |
+| Real git commit and branch creation             | ✅ Implemented                                                          |
+| Real GitHub PR creation via API                 | ✅ Implemented when `GITHUB_ENABLED=true`; simulated fallback otherwise |
+| PR review comment -> auto-fix loop              | 🔲 Not implemented                                                      |
+| QA escalation loop breaker node                 | 🔲 Not implemented                                                      |
+| Infra approval gate                             | 🔲 Not implemented                                                      |
+| Visual preview approval gate                    | 🔲 Not implemented                                                      |
 
-See `guideline/hitl_implementation_plan.md` for the full roadmap.
+See `guideline/hitl_implementation_plan.md` for the roadmap of pending HITL gates.
 
 ---
 
-## Enterprise Architecture (Target State)
+## Current Runtime Graph
 
+```text
+requirements -> architect -> [Gate 1 pause before fe_executor] ->
+fe_executor -> be_executor -> test_executor -> qa_executor -> infra_executor -> END
 ```
-                         ┌─────────────────────────────────┐
-                         │  USER: plain-English feature     │
-                         └────────────────┬────────────────┘
-                                          │
-                                    [Planner Node]
-                                 Confluence PRD + Jira tickets
-                                          │
-                              ◄─── GATE 1: Human reviews ───►
-                               Approve or correct the plan
-                                          │ (approved)
-                         ┌────────────────┼────────────────┐
-                         │                │                │
-                  [FE Executor]    [BE Executor]   (future: parallel)
-                         │                │
-                         └────────────────┘
-                                  │
-                          [Test Executor]
-                       pytest + vitest tests
-                                  │
-                          [QA Executor] ◄──── if attempt > 5:
-                        PASS / FAIL report     GATE 5: Human escalation
-                                  │ (PASS)
-                          [Infra Executor]
-                       Dockerfiles + compose
-                                  │
-                         ◄─ GATE 6: Infra approval ──►
-                          (cloud/IAM changes only)
-                                  │ (approved)
-                       [Visual Preview Node] (Phase 7)
-                     Vercel/ephemeral deployment URL
-                                  │
-                         ◄─ GATE 7: Human eyes on UI ──►
-                                  │ (approved)
-                       Git commit → GitHub PR opened
-                                  │
-                  ◄─── GATE 2: Human reviews PR on GitHub ───►
-                   Approve  ──────────────────  Request changes
-                      │                               │
-                 Auto-merge                    Webhook triggers
-               → Deploy staging              new LangGraph thread
-                                             with review comments
-                                                      │
-                                             Agent fixes + pushes
-                                             new commit to same PR
-```
+
+Notes:
+
+- Entry point is `requirements`.
+- `planner` is legacy/deprecated and is not wired into the runtime graph.
+- Gate 1 pauses after architecture planning and before any code-writing executor runs.
 
 ---
 
 ## Nodes (Current Implementation)
 
-### 1. Planner (`planner_node`)
+### 1. Requirements (`requirements_node`)
 
-Acts as the Lead Architect.
+- Role: Product analysis and requirement capture.
+- Output: PRD + Jira ticket artifacts via tools, plus `state["requirements"]` summary.
+- Rule: Defines what to build and why, not architecture internals.
 
-- **Input:** Raw user request
-- **Output:** Confluence PRD page, 2 Jira tickets (FE + BE), architectural plan in state
-- **Tools:** `create_confluence_page`, `create_jira_ticket`
-- **Prompt:** Hardcoded
-- **HITL Gate:** Gate 1 (Phase 1) — pauses here before any executor runs
+### 2. Architect (`architect_node`)
 
-### 2. FE Executor (`fe_executor_node`)
+- Role: Produce a no-code architectural plan.
+- Output: `state["architect_plan"]` with interfaces, contracts, and implementation guidance in prose/tables.
+- Rule: No code snippets by design.
 
-Acts as the Senior Frontend Developer.
+### 3. FE Executor (`fe_executor_node`)
 
-- **Input:** Architect plan (human-approved)
-- **Output:** React/TypeScript source files written to `FE_REPO_PATH`
-- **Tools:** `list_directory`, `read_file`, `write_file`, `search_company_knowledge_base`
-- **Prompt:** `prompts/fe_executor.md`
+- Role: Frontend implementation from approved plan + RAG knowledge retrieval.
 
-### 3. BE Executor (`be_executor_node`)
+### 4. BE Executor (`be_executor_node`)
 
-Acts as the Senior Backend Developer.
+- Role: Backend implementation from approved plan + RAG knowledge retrieval.
+- Extra behavior: ArchUnit validation retry loop (if enabled) before commit/PR.
 
-- **Input:** Architect plan (human-approved)
-- **Output:** FastAPI Python source files written to `BE_REPO_PATH`
-- **Tools:** `list_directory`, `read_file`, `write_file`, `search_company_knowledge_base`
-- **Prompt:** `prompts/be_executor.md`
+### 5. Test Executor (`test_executor_node`)
 
-### 4. Test Executor (`test_executor_node`)
+- Role: Generates tests aligned to generated FE/BE changes.
 
-Acts as the QA Engineer.
+### 6. QA Executor (`qa_executor_node`)
 
-- **Input:** Architect plan, FE and BE workspaces
-- **Output:** pytest (BE) and vitest (FE) test files written to both repos
-- **Tools:** `list_directory`, `read_file`, `write_file`, `search_company_knowledge_base`
-- **Prompt:** `prompts/test_executor.md`
+- Role: Produces QA report for generated work.
+- Note: Escalation routing node is not implemented yet.
 
-### 5. QA Executor (`qa_executor_node`)
+### 7. Infra Executor (`infra_executor_node`)
 
-Acts as the QA Architect — the Orchestrator layer.
-
-- **Input:** All generated source and test files
-- **Output:** `qa_report.md` with PASS/FAIL verdict
-- **Tools:** `list_directory`, `read_file`, `write_file`, `search_company_knowledge_base`
-- **Prompt:** `prompts/qa_executor.md`
-- **HITL Gate:** Gate 5 (Phase 5) — if `attempt_count >= 5`, escalates to human instead of looping
-
-### 6. Infra Executor (`infra_executor_node`)
-
-Acts as the Senior DevOps Engineer.
-
-- **Input:** Architect plan, FE and BE workspaces
-- **Output:** `Dockerfile` in each repo, `docker-compose.yml` in BE repo
-- **Tools:** `list_directory`, `read_file`, `write_file`, `search_company_knowledge_base`
-- **Prompt:** `prompts/infra_executor.md`
-- **HITL Gate:** Gate 6 (Phase 6) — any cloud/IAM change requires explicit human `yes`
+- Role: Generates infrastructure-related artifacts (for example Dockerfiles/compose files per plan).
+- Note: Explicit human infra-approval gate is not implemented yet.
 
 ---
 
-## Nodes (Planned — Not Yet Implemented)
+## State Schema
 
-| Node                    | Phase | Role                                                      |
-| ----------------------- | ----- | --------------------------------------------------------- |
-| `human_escalation_node` | 5     | Terminal prompt when QA loop exceeds attempt limit        |
-| `infra_approval_node`   | 6     | Explicit confirmation before any cloud API call           |
-| `visual_preview_node`   | 7     | Triggers ephemeral deployment, prompts human to review UI |
+The active shared state is defined in `state.py`:
 
----
-
-## State
-
-The shared state (`SDLCState`) passed between all nodes — current fields plus planned additions:
-
-| Field                | Type  | Status     | Description                                                  |
-| -------------------- | ----- | ---------- | ------------------------------------------------------------ |
-| `user_request`       | `str` | ✅         | Raw input from the user                                      |
-| `prd`                | `str` | ✅         | Confirmation that the PRD was saved to Confluence            |
-| `architect_plan`     | `str` | ✅         | Architectural plan (may be human-amended via `update_state`) |
-| `fe_output`          | `str` | ✅         | Summary of what the FE Executor wrote                        |
-| `be_output`          | `str` | ✅         | Summary of what the BE Executor wrote                        |
-| `test_output`        | `str` | ✅         | Summary of what the Test Executor wrote                      |
-| `qa_report`          | `str` | ✅         | Full QA report content                                       |
-| `infra_output`       | `str` | ✅         | Summary of what the Infra Executor wrote                     |
-| `attempt_count`      | `int` | 🔲 Phase 5 | Number of QA→Executor iterations (escalate at ≥5)            |
-| `human_escalation`   | `str` | 🔲 Phase 5 | Human hint injected when loop breaker fires                  |
-| `visual_preview_url` | `str` | 🔲 Phase 7 | URL of the ephemeral UI preview deployment                   |
-
----
-
-## Knowledge Base (RAG)
-
-Each executor has access to `search_company_knowledge_base`, which queries a local ChromaDB vector database built from `docs/*.md`. Agents are instructed via their prompt files to search the knowledge base before writing any code.
-
-- **Build:** `python build_knowledge_base.py` (run once; re-run when `docs/` changes)
-- **Storage:** `rag_db/chroma.sqlite3`
-- **Model:** `all-MiniLM-L6-v2` (HuggingFace, runs locally, no API cost)
-
-See `guideline/how_i_did_it.md` for full RAG concepts.
+| Field                | Type   | Status     | Description                                 |
+| -------------------- | ------ | ---------- | ------------------------------------------- |
+| `user_request`       | `str`  | ✅         | Raw user request                            |
+| `requirements`       | `str`  | ✅         | Requirements summary from Requirements node |
+| `prd`                | `str`  | ✅         | PRD generation result                       |
+| `architect_plan`     | `str`  | ✅         | Human-reviewable architecture plan          |
+| `fe_output`          | `str`  | ✅         | FE executor summary                         |
+| `be_output`          | `str`  | ✅         | BE executor summary                         |
+| `test_output`        | `str`  | ✅         | Test executor summary                       |
+| `qa_report`          | `str`  | ✅         | QA report content                           |
+| `infra_output`       | `str`  | ✅         | Infra executor summary                      |
+| `pr_urls`            | `list` | ✅         | PR links opened by executors                |
+| `attempt_count`      | `int`  | 🔲 Planned | QA retry/escalation tracking                |
+| `human_escalation`   | `str`  | 🔲 Planned | Human hint for stuck-loop recovery          |
+| `visual_preview_url` | `str`  | 🔲 Planned | Preview URL for visual approval gate        |
 
 ---
 
 ## Integrations
 
-### Currently Mocked (POC)
+### Implemented
 
-| Tool                     | Simulates           | Local side-effect                |
-| ------------------------ | ------------------- | -------------------------------- |
-| `create_confluence_page` | Confluence REST API | Writes `CONFLUENCE_PATH/*.md`    |
-| `create_jira_ticket`     | Jira REST API       | Writes `JIRA_PATH/*.md`          |
-| `create_github_pr`       | GitHub REST API     | Console log only                 |
-| `git_commit_to_branch`   | Git CLI             | Defined + validated but disabled |
+| Integration         | Status      | Behavior                                                         |
+| ------------------- | ----------- | ---------------------------------------------------------------- |
+| Confluence tool     | ✅          | Local mock artifact write                                        |
+| Jira tool           | ✅          | Local mock artifact write                                        |
+| Git branch + commit | ✅          | Real git operations                                              |
+| GitHub PR API       | ✅/fallback | Real PR when credentials configured; simulated message otherwise |
+| SQLite checkpoints  | ✅          | Pause/resume by `thread_id`                                      |
 
-### Planned (Phase 2+)
+### Planned
 
-| Integration                  | Phase | What it enables                       |
-| ---------------------------- | ----- | ------------------------------------- |
-| Real GitHub PRs via PyGithub | 2     | Actual code review on GitHub          |
-| Git branch per Jira ticket   | 2     | Traceable `feat/FE-123-...` branches  |
-| GitHub Webhook receiver      | 3     | PR comments trigger new agent thread  |
-| Vercel / preview deployment  | 7     | Ephemeral UI for visual review        |
-| LangSmith tracing            | 4     | Full observability of every agent run |
-| PostgreSQL checkpointer      | 4     | State survives process restarts       |
+| Integration                     | Status | Purpose                                    |
+| ------------------------------- | ------ | ------------------------------------------ |
+| GitHub review webhook           | 🔲     | PR comment -> agent correction loop        |
+| Preview deployment integration  | 🔲     | Human visual approval gate                 |
+| Dedicated infra approval policy | 🔲     | Human confirmation for risky infra actions |
 
 ---
 
-## Security
+## Observability and Security Snapshot
 
-| Control                     | Status     | Detail                                                                    |
-| --------------------------- | ---------- | ------------------------------------------------------------------------- |
-| Path traversal guard        | ✅         | `write_file` rejects paths outside `FE_REPO_PATH` / `BE_REPO_PATH`        |
-| Prompt injection delimiters | ✅         | `user_request` and `architect_plan` wrapped in `"""` in all prompts       |
-| API key guard               | ✅         | Raises `EnvironmentError` at startup if `ANTHROPIC_API_KEY` missing       |
-| Secrets on disk             | ⚠️         | `.env` file — acceptable for POC, must move to secrets manager in Phase 4 |
-| Cloud API guard             | 🔲 Phase 6 | Infra approval gate before any cloud/IAM call                             |
-
----
-
-## Dependencies
-
-| Package                    | Purpose                                            |
-| -------------------------- | -------------------------------------------------- |
-| `langchain-anthropic`      | LLM interface for Claude                           |
-| `langgraph`                | Graph-based agent orchestration                    |
-| `langchain-chroma`         | ChromaDB vector store integration                  |
-| `langchain-huggingface`    | Local embedding model for RAG                      |
-| `langchain-community`      | Document loaders (`DirectoryLoader`, `TextLoader`) |
-| `langchain-text-splitters` | Chunking documents for RAG ingestion               |
-| `python-dotenv`            | Loads `.env` at startup                            |
+| Area                               | Status | Notes                                                                      |
+| ---------------------------------- | ------ | -------------------------------------------------------------------------- |
+| Structured logging                 | ✅     | Configured via observability module (`json`/`console`)                     |
+| LangSmith tracing config           | ✅     | Config flags/env present; enable per environment                           |
+| Path traversal guard in file tools | ✅     | Writes constrained to allowed roots                                        |
+| Provider guardrails                | ✅     | Multi-provider checks (`anthropic`, `openai_compatible`, `ollama`, `stub`) |
+| Secrets manager integration        | 🔲     | Still env-based for local development                                      |
 
 ---
 
-## Running
+## Run Commands
 
 ```bash
 source venv/bin/activate
-python sdlc_workflow.py
+python main.py
 ```
 
-Rebuild knowledge base after updating `docs/`:
+Provider preflight:
+
+```bash
+python main.py --provider-check-only
+```
+
+Non-interactive run:
+
+```bash
+python main.py --feature "Add dark mode toggle" --non-interactive
+```
+
+Resume paused run:
+
+```bash
+python main.py --thread-id <existing-thread-id>
+```
+
+Rebuild the knowledge base after `docs/` updates:
 
 ```bash
 python build_knowledge_base.py
 ```
-
-Set `ANTHROPIC_API_KEY` in `.env` before running.
-
-## Running
-
-```bash
-source venv/bin/activate
-python sdlc_workflow.py
-```
-
-To rebuild the knowledge base after updating `docs/`:
-
-```bash
-python build_knowledge_base.py
-```
-
-Set `ANTHROPIC_API_KEY` in your `.env` file before running.

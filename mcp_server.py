@@ -20,19 +20,29 @@ Register in VS Code ~/.config/Code/User/mcp.json (or global mcp.json):
     }
 
 Tools exposed:
+    - health_check       Return service readiness and runtime metadata
   - start_pipeline     Start a new pipeline run (returns thread_id)
   - get_pipeline_state Read current state of a paused/running thread
   - approve_plan       Approve (or correct) the plan at Gate 1 and resume
+    - resolve_escalation Provide human feedback when QA escalation is triggered
   - list_threads       List all known checkpoint threads
 """
 
 import asyncio
 import logging
 import sys
+from datetime import datetime, timezone
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from config import (
+    LANGSMITH_TRACING_ENABLED,
+    LOG_FORMAT,
+    LOG_LEVEL,
+)
+from llm_factory import get_provider_name
 from observability import configure_observability
+from resilience import run_with_retry
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 # MCP servers communicate over stdio; logging MUST go to stderr only.
@@ -70,6 +80,21 @@ mcp = FastMCP(
 )
 
 
+@mcp.tool()
+def health_check() -> dict:
+    """Return a lightweight health snapshot for MCP operational checks."""
+    return {
+        "status": "ok",
+        "service": "sdlc-pipeline",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "pipeline_ready": _pipeline_ready,
+        "provider": get_provider_name(),
+        "log_level": LOG_LEVEL,
+        "log_format": LOG_FORMAT,
+        "langsmith_tracing_enabled": LANGSMITH_TRACING_ENABLED,
+    }
+
+
 # ── Tool: start_pipeline ──────────────────────────────────────────────────────
 @mcp.tool()
 def start_pipeline(feature_description: str) -> dict:
@@ -96,6 +121,7 @@ def start_pipeline(feature_description: str) -> dict:
 
     initial_state: SDLCState = {
         "user_request": feature_description,
+        "requirements": "",
         "prd": "",
         "architect_plan": "",
         "fe_output": "",
@@ -104,6 +130,8 @@ def start_pipeline(feature_description: str) -> dict:
         "qa_report": "",
         "infra_output": "",
         "pr_urls": [],
+        "attempt_count": 0,
+        "human_escalation": "",
     }
 
     log.info("Starting pipeline for thread: %s", thread_id)
@@ -162,8 +190,14 @@ def get_pipeline_state(thread_id: str) -> dict:
     return {
         "thread_id": thread_id,
         "next_nodes": next_nodes,
-        "status": "paused_at_gate1" if "fe_executor" in next_nodes else (
-            "complete" if not next_nodes else "running"
+        "status": (
+            "paused_at_gate1"
+            if "fe_executor" in next_nodes
+            else (
+                "paused_at_escalation"
+                if "human_escalation" in next_nodes
+                else ("complete" if not next_nodes else "running")
+            )
         ),
         "prd": state.get("prd", ""),
         "architect_plan": state.get("architect_plan", ""),
@@ -209,7 +243,9 @@ def approve_plan(thread_id: str, corrections: str = "") -> dict:
 
         log.info("Rewriting plan with corrections for thread: %s", thread_id)
         llm = ChatAnthropic(model="claude-sonnet-4-5", temperature=0.1)
-        response = llm.invoke([HumanMessage(content=f"""
+        response = run_with_retry(
+            "mcp_approve_plan_rewrite",
+            lambda: llm.invoke([HumanMessage(content=f"""
 You are a Lead Architect. A human reviewer has provided corrections to an architectural plan.
 Rewrite the plan as a single, clean document that fully incorporates the corrections.
 Do not include any commentary about what changed — just produce the updated plan.
@@ -225,7 +261,8 @@ HUMAN CORRECTIONS:
 \"\"\"
 
 Produce the rewritten plan now:
-""")])
+        """)]),
+        )
         revised_plan = response.content if isinstance(
             response.content, str) else current_plan
         app.update_state(config, {"architect_plan": revised_plan})
@@ -243,13 +280,73 @@ Produce the rewritten plan now:
     pr_urls = final_state.get("pr_urls", [])
     qa_report = final_state.get("qa_report", "")
 
+    snapshot = app.get_state(config)
+    next_nodes = list(snapshot.next or [])
+    status = "complete"
+    if "human_escalation" in next_nodes:
+        status = "paused_at_escalation"
+
     return {
         "thread_id": thread_id,
-        "status": "complete",
+        "status": status,
         "nodes_completed": nodes_run,
+        "next_nodes": next_nodes,
         "qa_report": qa_report,
         "pr_urls": pr_urls,
-        "message": "Pipeline complete. Check configured output paths for generated code.",
+        "message": (
+            "Pipeline complete. Check configured output paths for generated code."
+            if status == "complete"
+            else "Pipeline paused at QA escalation. Call resolve_escalation(thread_id, feedback) to continue."
+        ),
+    }
+
+
+@mcp.tool()
+def resolve_escalation(thread_id: str, feedback: str) -> dict:
+    """
+    Resume pipeline execution after a QA escalation pause.
+    """
+    app = _ensure_pipeline()
+    config = {"configurable": {"thread_id": thread_id}}
+
+    snapshot = app.get_state(config)
+    next_nodes = list(snapshot.next or [])
+    if "human_escalation" not in next_nodes:
+        return {
+            "thread_id": thread_id,
+            "status": "not_paused_at_escalation",
+            "next_nodes": next_nodes,
+            "message": "Thread is not waiting at human escalation.",
+        }
+
+    app.update_state(
+        config,
+        {
+            "human_escalation": feedback.strip() or "Fix all failing QA checks from the latest report.",
+        },
+    )
+
+    nodes_run = []
+    for output in app.stream(None, config):
+        for node_name in output:
+            nodes_run.append(node_name)
+            log.info("Node completed: %s", node_name)
+
+    final_snapshot = app.get_state(config)
+    final_next_nodes = list(final_snapshot.next or [])
+    final_state = final_snapshot.values
+
+    status = "complete" if not final_next_nodes else "running"
+    if "human_escalation" in final_next_nodes:
+        status = "paused_at_escalation"
+
+    return {
+        "thread_id": thread_id,
+        "status": status,
+        "nodes_completed": nodes_run,
+        "next_nodes": final_next_nodes,
+        "qa_report": final_state.get("qa_report", ""),
+        "pr_urls": final_state.get("pr_urls", []),
     }
 
 

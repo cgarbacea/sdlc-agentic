@@ -101,12 +101,20 @@ python main.py --provider-check --feature "Add dark mode toggle"
 
 # Resume a paused run from SQLite checkpoints
 python main.py --thread-id <existing-thread-id>
+
+# Run lightweight health endpoint for probes
+make run-health
+# then check: http://127.0.0.1:8081/health
 ```
 
 Notes:
 
 - `--provider-check` and `--provider-check-only` validate required env vars by provider and show the effective provider.
 - Preflight checks env presence/config only; they do not validate remote API quota or key billing status.
+- Transient LLM/tool call failures use retry/backoff settings from `.env`:
+  - `RETRY_MAX_ATTEMPTS`
+  - `RETRY_BASE_DELAY_SECONDS`
+  - `RETRY_MAX_DELAY_SECONDS`
 
 Provider examples:
 

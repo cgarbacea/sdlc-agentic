@@ -2,6 +2,7 @@ from langchain_core.messages import HumanMessage
 
 from config import FE_REPO_PATH, BE_REPO_PATH, CURRENT_DATE
 from llm_factory import get_llm, is_stub_mode, get_provider_name
+from resilience import run_with_retry
 from state import SDLCState
 
 
@@ -67,7 +68,9 @@ def architect_node(state: SDLCState) -> SDLCState:
 
     llm = get_llm(temperature=0.1)
     try:
-        plan_response = llm.invoke([HumanMessage(content=f"""
+        plan_response = run_with_retry(
+            "architect_llm_invoke",
+            lambda: llm.invoke([HumanMessage(content=f"""
 You are the Lead Architect. Your job is to write an architectural plan for the development team.
 
 Feature requirements:
@@ -116,7 +119,8 @@ List any assumptions made and risks the team should be aware of.
 CRITICAL CONSTRAINT: Do NOT write any code. No TypeScript, no Java, no YAML, no JSON examples.
 Describe everything in prose, tables, or bullet points.
 The development team will write the code — your job is to tell them what to build and why.
-""")])
+""")]),
+        )
     except Exception as exc:
         print(
             f"   ⚠️ [Architect] LLM call failed ({exc}). Falling back to stub mode.")

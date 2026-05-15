@@ -12,8 +12,8 @@ class SDLCState(TypedDict):
     qa_report: str
     infra_output: str
     pr_urls: list          # Phase 2 — PR URLs opened by executors
-    # Phase 5 (HITL loop breaker) — not yet active
-    # attempt_count: int
-    # human_escalation: str
+    # Phase 6 (HITL loop breaker)
+    attempt_count: int
+    human_escalation: str
     # Phase 7 (visual preview) — not yet active
     # visual_preview_url: str

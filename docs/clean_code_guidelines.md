@@ -45,6 +45,46 @@
 - Integration tests must use a dedicated test database, never the development database.
 - Mock all external HTTP calls in tests using `respx` (backend) or `msw` (frontend).
 
+## Documentation Discipline
+
+- Code should explain what; comments should explain why.
+- Prefer clearer naming and smaller functions before adding comments.
+- Do not add comments that restate obvious code behavior.
+- Document business constraints, security constraints, and non-obvious technical trade-offs.
+- Delete commented-out code instead of leaving it inline.
+
+### When Comments Are Required
+
+- Business rules with policy or contractual meaning
+- Non-obvious performance optimizations and their rationale
+- Workarounds for external system bugs (with ticket reference)
+- Security-sensitive decisions (PII handling, token handling, access constraints)
+
+### When Comments Are Noise
+
+- Simple getters/setters
+- Trivial null checks or loop descriptions
+- Obvious statements like "set id" or "return result"
+
+## JavaDoc Rules
+
+- Public APIs that are consumed across modules/services should have JavaDoc.
+- Internal private methods can skip JavaDoc when naming/signature are already clear.
+- JavaDoc should include behavior contracts, side effects, and exceptions where relevant.
+- Keep JavaDoc concise and aligned with actual behavior; update it with code changes.
+
+## Annotation and Suppression Hygiene
+
+- Avoid `@SuppressWarnings` unless there is a clear, documented reason.
+- If suppression is necessary, scope it as narrowly as possible and add a short why comment.
+- Never use suppression to hide real design or type-safety problems.
+
+## TODO Hygiene
+
+- TODO comments must include a ticket/reference and an owner when possible.
+- Avoid vague TODOs such as "fix later" with no traceability.
+- Prefer creating an issue and referencing it in code comments.
+
 ## Git & PR Standards
 
 - Branch names must follow the pattern: `feat/<jira-ticket-id>-short-description`.

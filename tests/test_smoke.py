@@ -21,6 +21,7 @@ def test_state_schema_has_required_keys():
     hints = typing.get_type_hints(SDLCState)
     required = {
         "user_request",
+        "requirements",
         "prd",
         "architect_plan",
         "fe_output",
@@ -29,6 +30,8 @@ def test_state_schema_has_required_keys():
         "qa_report",
         "infra_output",
         "pr_urls",
+        "attempt_count",
+        "human_escalation",
     }
     missing = required - hints.keys()
     assert not missing, f"SDLCState is missing fields: {missing}"
@@ -76,7 +79,8 @@ def test_prompts_exist():
     for fname in expected:
         path = prompt_dir / fname
         assert path.exists(), f"Missing prompt file: prompts/{fname}"
-        assert path.stat().st_size > 0, f"Prompt file is empty: prompts/{fname}"
+        assert path.stat(
+        ).st_size > 0, f"Prompt file is empty: prompts/{fname}"
 
 
 def test_sqlite_checkpointer_creates_db(tmp_path):

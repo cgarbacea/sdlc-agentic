@@ -88,6 +88,14 @@ def _invoke_be_generation(state: SDLCState, attempt: int, previous_failure: str 
             f"{previous_failure}\n"
         )
 
+    escalation_feedback = (state.get("human_escalation") or "").strip()
+    escalation_block = ""
+    if escalation_feedback:
+        escalation_block = (
+            "\nHUMAN ESCALATION FEEDBACK (priority guidance):\n"
+            f"{escalation_feedback}\n"
+        )
+
     prompt = f"""
     {_load_prompt("prompts/be_executor.md")}
 
@@ -107,6 +115,7 @@ def _invoke_be_generation(state: SDLCState, attempt: int, previous_failure: str 
     - Do NOT call create_github_pr.
     - Only modify BE code/files to satisfy architecture and validations.
     {correction_block}
+    {escalation_block}
     """
 
     llm = get_llm(temperature=0.1)

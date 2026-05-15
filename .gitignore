@@ -30,3 +30,6 @@ rag_db/
 
 # VS Code
 .vscode/settings.json
+
+# References only, not actual files
+/guideline/skills/
